@@ -2,11 +2,26 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 from pydantic import ConfigDict, field_validator, model_validator
 from pydantic.dataclasses import dataclass
+from tqdm import tqdm
+
+plt.rcParams.update(
+    {
+        "font.size": 8,
+        "axes.titlesize": 8,
+        "axes.labelsize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 8,
+        "figure.titlesize": 8,
+        "pdf.fonttype": 42,
+    },
+)
 
 W: float = 2 * np.pi / 24.0
 RAD2H: float = 24.0 / (2.0 * np.pi)
@@ -294,7 +309,11 @@ class DifferentialRhythmicity:
         df_to_analyse: pd.DataFrame = df[mask].reset_index(drop=True)
 
         rows: list[dict] = []
-        for gene, row in df_to_analyse.set_index("Genes").iterrows():
+        for gene, row in tqdm(
+            df_to_analyse.set_index("Genes").iterrows(),
+            total=len(df_to_analyse),
+            desc="Fitting models to genes expressed in both conditions",
+        ):
             alpha_vec: np.ndarray = row[self.columns_cond1].to_numpy(float)
             beta_vec: np.ndarray = row[self.columns_cond2].to_numpy(float)
             design: pd.DataFrame = build_design(alpha_vec, beta_vec, self.t_cond1, self.t_cond2)
@@ -335,7 +354,11 @@ class DifferentialRhythmicity:
         df_to_analyse: pd.DataFrame = df[mask].reset_index(drop=True)
 
         rows: list[dict] = []
-        for gene, row in df_to_analyse.set_index("Genes").iterrows():
+        for gene, row in tqdm(
+            df_to_analyse.set_index("Genes").iterrows(),
+            total=len(df_to_analyse),
+            desc="Fitting models to genes expressed in cond1 only",
+        ):
             alpha_vec: np.ndarray = row[self.columns_cond1].to_numpy(float)
             design: pd.DataFrame = build_design_cond1(alpha_vec, self.t_cond1)
             results: list[BaseModelOneCondition] = [m.fit(design) for m in MODELS_ONE_CONDITION]
@@ -375,7 +398,11 @@ class DifferentialRhythmicity:
         df_to_analyse: pd.DataFrame = df[mask].reset_index(drop=True)
 
         rows: list[dict] = []
-        for gene, row in df_to_analyse.set_index("Genes").iterrows():
+        for gene, row in tqdm(
+            df_to_analyse.set_index("Genes").iterrows(),
+            total=len(df_to_analyse),
+            desc="Fitting models to genes expressed in cond2 only",
+        ):
             beta_vec: np.ndarray = row[self.columns_cond2].to_numpy(float)
             design: pd.DataFrame = build_design_cond2(beta_vec, self.t_cond2)
             results: list[BaseModelOneCondition] = [m.fit(design) for m in MODELS_ONE_CONDITION]
@@ -420,8 +447,8 @@ class DifferentialRhythmicity:
         df_pre_export = self.df.merge(results_total, left_on="Genes", right_on="gene", how="right")
         column_list: list = [
             "Genes",
-            *columns_cond1,
-            *columns_cond2,
+            *self.columns_cond1,
+            *self.columns_cond2,
             "w_model1",
             "w_model2",
             "w_model3",
@@ -454,7 +481,7 @@ class OmicsHeatmap:
     cond1_label: str = "cond1"
     cond2_label: str = "cond2"
 
-    deduplicate_on_init: bool = False
+    show_unexpressed: bool = True
 
     # --- validators ---
     @field_validator("t_cond1", "t_cond2", mode="before")
@@ -556,7 +583,9 @@ class OmicsHeatmap:
         vmax_global = 2.5
 
         mask = (df["model"] == m2) & (df["subclass"] == "b")
-        z_cond1_filtered = z_cond1[mask.to_numpy()]
+        z_cond1_filtered = z_cond1[mask.to_numpy()].copy()
+        if not self.show_unexpressed:
+            z_cond1_filtered[:] = 0
         im1 = axes[0, 0].imshow(
             z_cond1_filtered,
             aspect="auto",
@@ -742,7 +771,9 @@ class OmicsHeatmap:
         axes[1, 1].set_yticks([])
 
         mask = (df["model"] == m3) & (df["subclass"] == "a")
-        z_cond2_filtered = z_cond2[mask.to_numpy()]
+        z_cond2_filtered = z_cond2[mask.to_numpy()].copy()
+        if not self.show_unexpressed:
+            z_cond2_filtered[:] = 0
         im8 = axes[2, 1].imshow(
             z_cond2_filtered,
             aspect="auto",
@@ -919,7 +950,6 @@ class TimeSeriesExample:
             df_test["is_alpha"] = (df_test["dataset"] == "alpha").astype(int)
             df_test["is_beta"] = (df_test["dataset"] == "beta").astype(int)
             y_test = res.predict(exog=df_test)
-            print(y_test)
             y_test_cond1: np.ndarray = y_test[df_test["dataset"] == "alpha"].to_numpy()
             y_test_cond2: np.ndarray = y_test[df_test["dataset"] == "beta"].to_numpy()
         return t_test, y_test_cond1, y_test_cond2
@@ -949,7 +979,6 @@ class TimeSeriesExample:
             df_test["cos_wt"] = np.cos(W * df_test["time"].to_numpy().astype(float))
             df_test["sin_wt"] = np.sin(W * df_test["time"].to_numpy().astype(float))
             y_test = res.predict(exog=df_test)
-            print(y_test)
             y_test_cond1: np.ndarray = y_test.to_numpy()
             y_test_cond2: np.ndarray = np.full_like(t_test, np.nan)
         return t_test, y_test_cond1, y_test_cond2
@@ -979,7 +1008,6 @@ class TimeSeriesExample:
             df_test["cos_wt"] = np.cos(W * df_test["time"].to_numpy().astype(float))
             df_test["sin_wt"] = np.sin(W * df_test["time"].to_numpy().astype(float))
             y_test = res.predict(exog=df_test)
-            print(y_test)
             y_test_cond1: np.ndarray = np.full_like(t_test, np.nan)
             y_test_cond2: np.ndarray = y_test.to_numpy()
 

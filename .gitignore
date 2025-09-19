@@ -208,5 +208,14 @@ __marimo__/
 
 .DS_Store
 
+tests/*
+test-reports/*
 tests/data/*
 !tests/data/.gitkeep   # leave a marker so the empty dir is in the repo
+
+src/cosinor_lite/*.egg-info/
+src/cosinor_lite/states_info.py
+src/cosinor_lite/cities.json
+"README 2.md"
+
+.DS_Store

@@ -19,6 +19,7 @@ dependencies = [
     "astropy",
     "pingouin",
     "pydantic>=2.11.9",
+    "tqdm>=4.67.1",
 ]
 name = "cosinor-lite"
 version = "0.0.0"
