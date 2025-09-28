@@ -20,6 +20,7 @@ dependencies = [
     "pingouin",
     "pydantic>=2.11.9",
     "tqdm>=4.67.1",
+    "openpyxl>=3.1.5",
 ]
 name = "cosinor-lite"
 version = "0.0.0"
