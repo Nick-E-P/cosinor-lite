@@ -90,7 +90,7 @@ class LiveCellDataset:
         poly_fit = np.polyval(coeffs, x)
         return x, poly_fit
 
-    def moving_avergae_trend(self, x: np.ndarray, y: np.ndarray, window: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    def moving_average_trend(self, x: np.ndarray, y: np.ndarray, window: int = 5) -> tuple[np.ndarray, np.ndarray]:
         if window < 1:
             msg = "Window size must be at least 1."
             raise ValueError(msg)
@@ -98,13 +98,19 @@ class LiveCellDataset:
         ma_fit = y_series.rolling(window=window, center=True).mean().to_numpy()
         return x, ma_fit
 
-    def get_trend(self, y: np.ndarray, method: str = "linear", window: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    def get_trend(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        method: str = "linear",
+        window: int = 5,
+    ) -> tuple[np.ndarray, np.ndarray]:
         if method == "linear":
-            x_processed, trend = self.linear_trend(self.time, y)
+            x_processed, trend = self.linear_trend(x, y)
         elif method == "poly2":
-            x_processed, trend = self.poly2_trend(self.time, y)
+            x_processed, trend = self.poly2_trend(x, y)
         elif method == "moving_average":
-            x_processed, trend = self.moving_avergae_trend(self.time, y, window=window)
+            x_processed, trend = self.moving_average_trend(x, y, window=window)
         else:
             msg = f"Unknown detrending method: {method}"
             raise ValueError(msg)
@@ -116,10 +122,12 @@ class LiveCellDataset:
             ids, replicates, data = self.get_group1_ids_replicates_data()
             color = self.color_group1
             n_group = len(ids)
+            group_label = self.group1_label
         elif group == "group2":
             ids, replicates, data = self.get_group2_ids_replicates_data()
             color = self.color_group2
             n_group = len(ids)
+            group_label = self.group2_label
         else:
             msg = "group must be 'group1' or 'group2'"
             raise ValueError(msg)
@@ -140,14 +148,9 @@ class LiveCellDataset:
                 x = self.time
                 y = data[:, mask][:, j]
                 ax.plot(x, y, color=color)
-                # x_processed, y_processed = self.linear_trend(x, y)
-                # ax.plot(x_processed, y_processed, color="black", linestyle="--", linewidth=0.8)
-                # x_processed, y_processed = self.poly2_trend(x, y)
-                # ax.plot(x_processed, y_processed, color="black", linestyle="--", linewidth=0.8)
-                # x_processed, y_processed = self.moving_avergae_trend(x, y, window=144)
-                x_processed, y_processed = self.get_trend(y, method="moving_average", window=144)
+                x_processed, y_processed = self.get_trend(x, y, method="moving_average", window=144)
                 ax.plot(x_processed, y_processed, color="black", linestyle="--", linewidth=0.8)
-            ax.set_title(f"{ids[i]} (n={n_reps})")
+            ax.set_title(f"{ids[i]} (n={n_reps}) - {group_label}")
             ax.set_xlabel("Time")
             ax.set_ylabel("Expression")
 
@@ -164,9 +167,16 @@ def constant_model(x, mesor):
 
 
 def cosine_model_24(x, amplitude, acrophase, mesor):
-    # amplitude, acrophase, mesor = params
     period = 24.0
     return amplitude * np.cos(2 * np.pi * (x - acrophase) / period) + mesor
+
+
+def cosine_model_free_period(x, amplitude, acrophase, period, mesor):
+    return amplitude * np.cos(2 * np.pi * (x - acrophase) / period) + mesor
+
+
+def cosine_model_damped(x, amplitude, damp, acrophase, period, mesor):
+    return amplitude * np.exp(-damp * x) * np.cos(2 * np.pi * (x - acrophase) / period) + mesor
 
 
 class CosinorAnalysis(LiveCellDataset):
@@ -232,31 +242,197 @@ class CosinorAnalysis(LiveCellDataset):
         }
         return results, t_test, y_test
 
-    def fit_cosinor(self, group: str, m: int = 5) -> None:
-        ids1, replicates1, data1 = self.get_group1_ids_replicates_data()
-        ids2, replicates2, data2 = self.get_group2_ids_replicates_data()
+    def fit_cosinor_free_period(self, x: np.ndarray, y: np.ndarray) -> tuple[dict, np.ndarray, np.ndarray]:
+        # initial parameter guesses: amplitude, acrophase, mesor, sigma
 
-        N_group1 = len(ids1)
-        N_group2 = len(ids2)
+        initial_params = [np.mean(y)]
+        params_opt, _ = curve_fit(constant_model, x, y, p0=initial_params)
+        model_predictions_constant = constant_model(x, params_opt)
 
-        n = np.ceil(N_group1 / 5).astype(int)
+        initial_params = [np.std(y), 0.0, np.mean(y)]
+        params_opt, _ = curve_fit(cosine_model_24, x, y, p0=initial_params)
+        amplitude_fit, acrophase_fit, mesor_fit = params_opt
+        initial_params = [amplitude_fit, acrophase_fit, 24.0, mesor_fit]
 
-        study_list = np.unique(ids1).tolist()
+        lower_bounds = [
+            -np.inf,
+            -np.inf,
+            20,
+            -np.inf,
+        ]
+        upper_bounds = [np.inf, np.inf, 28, np.inf]
+
+        params_opt, _ = curve_fit(
+            cosine_model_free_period,
+            x,
+            y,
+            p0=initial_params,
+            bounds=(lower_bounds, upper_bounds),
+        )
+        amplitude_fit, acrophase_fit, period_fit, mesor_fit = params_opt
+        model_predictions_cosine = cosine_model_free_period(x, amplitude_fit, acrophase_fit, period_fit, mesor_fit)
+
+        rss_cosinor = np.sum((model_predictions_cosine - y) ** 2)
+        rss_constant = np.sum((model_predictions_constant - y) ** 2)
+
+        n = len(y)
+        p1 = 1
+        p2 = 4
+
+        f_test = ((rss_constant - rss_cosinor) / rss_cosinor) * ((n - p2) / (p2 - p1))
+
+        df_model = p2 - p1
+        df_residuals = n - p2
+
+        f_statistic_p_value = f.sf(f_test, df_model, df_residuals)
+
+        t_test_acro = np.linspace(0, 24, 1440)
+        y_test_acro = cosine_model_24(t_test_acro, amplitude_fit, acrophase_fit, mesor_fit)
+
+        mesor = mesor_fit
+        amplitude = abs(amplitude_fit)
+        acrophase = t_test_acro[np.argmax(y_test_acro)]
+        period = period_fit
+
+        t_test = np.linspace(x[0], x[-1], 1440)
+        y_test = cosine_model_free_period(t_test, amplitude_fit, acrophase_fit, period_fit, mesor_fit)
+
+        results = {
+            "mesor": mesor,
+            "amplitude": amplitude,
+            "acrophase": acrophase,
+            "period": period,
+            "p-val osc": f_statistic_p_value,
+        }
+        return results, t_test, y_test
+
+    def fit_cosinor_damped(self, x: np.ndarray, y: np.ndarray) -> tuple[dict, np.ndarray, np.ndarray]:
+        # initial parameter guesses: amplitude, acrophase, mesor, sigma
+
+        initial_params = [np.mean(y)]
+        params_opt, _ = curve_fit(constant_model, x, y, p0=initial_params)
+        model_predictions_constant = constant_model(x, params_opt)
+
+        initial_params = [np.std(y), 0.0, np.mean(y)]
+        params_opt, _ = curve_fit(cosine_model_24, x, y, p0=initial_params)
+        amplitude_fit, acrophase_fit, mesor_fit = params_opt
+        initial_params = [amplitude_fit, 0.01, acrophase_fit, 24.0, mesor_fit]
+
+        lower_bounds = [
+            -np.inf,
+            0.0,
+            -np.inf,
+            20,
+            -np.inf,
+        ]
+        upper_bounds = [np.inf, np.inf, np.inf, 28, np.inf]
+
+        params_opt, _ = curve_fit(
+            cosine_model_damped,
+            x,
+            y,
+            p0=initial_params,
+            bounds=(lower_bounds, upper_bounds),
+        )
+        amplitude_fit, damp_fit, acrophase_fit, period_fit, mesor_fit = params_opt
+        model_predictions_cosine = cosine_model_damped(
+            x,
+            amplitude_fit,
+            damp_fit,
+            acrophase_fit,
+            period_fit,
+            mesor_fit,
+        )
+
+        rss_cosinor = np.sum((model_predictions_cosine - y) ** 2)
+        rss_constant = np.sum((model_predictions_constant - y) ** 2)
+
+        n = len(y)
+        p1 = 1
+        p2 = 5
+
+        f_test = ((rss_constant - rss_cosinor) / rss_cosinor) * ((n - p2) / (p2 - p1))
+
+        df_model = p2 - p1
+        df_residuals = n - p2
+
+        f_statistic_p_value = f.sf(f_test, df_model, df_residuals)
+
+        t_test_acro = np.linspace(0, 24, 1440)
+        y_test_acro = cosine_model_damped(t_test_acro, amplitude_fit, damp_fit, acrophase_fit, period_fit, mesor_fit)
+
+        mesor = mesor_fit
+        amplitude = abs(amplitude_fit)
+        acrophase = t_test_acro[np.argmax(y_test_acro)]
+        period = period_fit
+        damp = damp_fit
+
+        t_test = np.linspace(x[0], x[-1], 1440)
+        y_test = cosine_model_damped(t_test, amplitude_fit, damp_fit, acrophase_fit, period_fit, mesor_fit)
+
+        results = {
+            "mesor": mesor,
+            "amplitude": amplitude,
+            "acrophase": acrophase,
+            "period": period,
+            "damp": damp,
+            "p-val osc": f_statistic_p_value,
+        }
+        return results, t_test, y_test
+
+    def get_cosinor_fits(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        method: str = "cosinor_24",
+    ) -> tuple[dict, np.ndarray, np.ndarray]:
+        if method == "cosinor_24":
+            results, t_test, model_predictions_cosine = self.fit_cosinor_24(x, y)
+        elif method == "cosinor_free_period":
+            results, t_test, model_predictions_cosine = self.fit_cosinor_free_period(x, y)
+        elif method == "cosinor_damped":
+            results, t_test, model_predictions_cosine = self.fit_cosinor_damped(x, y)
+        else:
+            msg = f"Unknown cosine model: {method}"
+            raise ValueError(msg)
+
+        return results, t_test, model_predictions_cosine
+
+    def fit_cosinor(self, group: str, cosinor_model: str = "cosinor_24", m: int = 5) -> pd.DataFrame:
+        if group == "group1":
+            ids, replicates, data = self.get_group1_ids_replicates_data()
+            color = self.color_group1
+            n_group = len(ids)
+            group_label = self.group1_label
+        elif group == "group2":
+            ids, replicates, data = self.get_group2_ids_replicates_data()
+            color = self.color_group2
+            n_group = len(ids)
+            group_label = self.group2_label
+        else:
+            msg = "group must be 'group1' or 'group2'"
+            raise ValueError(msg)
+
+        n = np.ceil(n_group / m).astype(int)
+
+        study_list = np.unique(ids).tolist()
 
         fig = plt.figure(figsize=(5 * n / 2.54, 5 * m / 2.54))
 
+        to_export_list = []
+
         for i, id_curr in enumerate(study_list):
-            mask = np.array(ids1) == id_curr
+            mask = np.array(ids) == id_curr
             n_reps = np.sum(mask)
 
             ax = fig.add_subplot(n, m, i + 1)
 
             for j in range(n_reps):
+                exp_info = {"id": id_curr, "replicate": j + 1, "group": group_label}
+
                 x = self.time
-                y = data1[:, mask][:, j]
-                # ax.plot(x, y, color=self.color_group1)
-                x_processed, y_processed = self.get_trend(y, method="moving_average", window=144)
-                # ax.plot(x_processed, y_processed, color="black", linestyle="--", linewidth=0.8)
+                y = data[:, mask][:, j]
+                x_processed, y_processed = self.get_trend(x, y, method="moving_average", window=144)
                 y_detrended = y - y_processed
                 ax.plot(x_processed, y_detrended, color=self.color_group1)
                 #  select only valid points (non-NaN) for fitting
@@ -268,15 +444,19 @@ class CosinorAnalysis(LiveCellDataset):
                 x_fit = x_valid[range_mask]
                 y_fit = y_valid[range_mask]
 
-                results, t_test, model_predictions_cosine = self.fit_cosinor_24(x_fit, y_fit)
+                # results, t_test, model_predictions_cosine = self.fit_cosinor_24(x_fit, y_fit)
+                results, t_test, model_predictions_cosine = self.get_cosinor_fits(x_fit, y_fit, method=cosinor_model)
+                to_export_list.append({**exp_info, **results})
                 ax.plot(t_test, model_predictions_cosine, color="k", linestyle="--")
 
-            ax.set_title(f"{ids1[i]} (n={n_reps})")
+            ax.set_title(f"{ids[i]} (n={n_reps}) - {group_label}")
             ax.set_xlabel("Time")
             ax.set_ylabel("Expression")
 
         plt.tight_layout()
         plt.show()
+        df_export = pd.DataFrame(to_export_list)
+        return df_export
 
 
 # %%
@@ -320,6 +500,8 @@ cosinor_analysis = CosinorAnalysis(
     group2_label="T2D",
 )
 
-cosinor_analysis.fit_cosinor(m=5)
+# df_export = cosinor_analysis.fit_cosinor(group="group1", cosinor_model="cosinor_24", m=5)
+# df_export = cosinor_analysis.fit_cosinor(group="group1", cosinor_model="cosinor_free_period", m=5)
+df_export = cosinor_analysis.fit_cosinor(group="group1", cosinor_model="cosinor_damped", m=5)
 
 # %%
