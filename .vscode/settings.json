@@ -9,14 +9,23 @@
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     // ─── Ruff: formatter, linter, import sorter ────────
     // Formatting + code actions on save
+    // "[python]": {
+    //     "editor.defaultFormatter": "charliermarsh.ruff", // Ruff formats & sorts imports
+    //     "editor.formatOnSave": true,
+    //     "editor.codeActionsOnSave": {
+    //         "source.organizeImports": "explicit", // Ruff handles import‑sorting:contentReference[oaicite:0]{index=0}
+    //         "source.fixAll": "explicit" // Ruff auto‑fixes lint on save:contentReference[oaicite:1]{index=1}
+    //     }
+    // },
     "[python]": {
-        "editor.defaultFormatter": "charliermarsh.ruff", // Ruff formats & sorts imports
+        "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit", // Ruff handles import‑sorting:contentReference[oaicite:0]{index=0}
-            "source.fixAll": "explicit" // Ruff auto‑fixes lint on save:contentReference[oaicite:1]{index=1}
+            "source.fixAll": true,
+            "source.fixAll.ruff": true,
+            "source.organizeImports": true
         }
-    },
+    }
     // ─── Ty: super‑fast type checking / language server ─
     // After installing the “ty” VS Code extension:
     // "python.languageServer": "None",          // disable Pylance’s LS to avoid clashing:contentReference[oaicite:2]{index=2}

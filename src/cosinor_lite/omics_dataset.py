@@ -9,9 +9,47 @@ from pydantic import ConfigDict, field_validator, model_validator
 from pydantic.dataclasses import dataclass
 from scipy.stats import spearmanr
 
+plt.rcParams.update(
+    {
+        "font.size": 8,
+        "axes.titlesize": 8,
+        "axes.labelsize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 8,
+        "figure.titlesize": 8,
+        "pdf.fonttype": 42,
+    },
+)
+plt.style.use("seaborn-v0_8-ticks")
+
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class OmicsDataset:
+    """
+    Represent an omics expression table and derived metrics.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Input table containing gene expression measurements.
+    columns_cond1 : list[str]
+        Column names for condition 1 samples.
+    columns_cond2 : list[str]
+        Column names for condition 2 samples.
+    t_cond1 : numpy.ndarray
+        Time points associated with ``columns_cond1``.
+    t_cond2 : numpy.ndarray
+        Time points associated with ``columns_cond2``.
+    cond1_label : str, optional
+        Display label for condition 1, by default ``"cond1"``.
+    cond2_label : str, optional
+        Display label for condition 2, by default ``"cond2"``.
+    deduplicate_on_init : bool, optional
+        Whether to deduplicate genes immediately after initialization, by default ``False``.
+
+    """
+
     df: pd.DataFrame
 
     columns_cond1: list[str]
@@ -23,10 +61,29 @@ class OmicsDataset:
 
     deduplicate_on_init: bool = False
 
-    # --- validators ---
     @field_validator("t_cond1", "t_cond2", mode="before")
     @classmethod
     def _to_1d_f64(cls, v: object) -> np.ndarray:  # ← return type fixes ANN206
+        """
+        Coerce incoming arrays to one-dimensional ``float64`` np.ndarrays.
+
+        Parameters
+        ----------
+        v : object
+            Sequence-like data to convert.
+
+        Returns
+        -------
+        numpy.ndarray
+            Converted one-dimensional array.
+
+        Raises
+        ------
+        ValueError
+            If the incoming value cannot be reshaped to one dimension.
+
+
+        """
         a = np.asarray(v, dtype=np.float64)
         if a.ndim != 1:
             text: str = "expected 1D array"
@@ -35,6 +92,21 @@ class OmicsDataset:
 
     @model_validator(mode="after")
     def _check_columns(self) -> Self:
+        """
+        Ensure all requested columns are present in the DataFrame.
+
+        Returns
+        -------
+        Self
+            The validated dataset instance.
+
+        Raises
+        ------
+        ValueError
+            If any required columns are missing.
+
+
+        """
         missing = [c for c in (self.columns_cond1 + self.columns_cond2) if c not in self.df.columns]
         if missing:
             text = f"Missing columns: {missing}"  # satisfies EM101 (no string literal in raise)
@@ -42,6 +114,7 @@ class OmicsDataset:
         return self
 
     def __post_init__(self) -> None:
+        """Populate derived columns and optionally deduplicate entries."""
         self.add_detected_timepoint_counts()
         self.add_mean_expression()
         self.add_number_detected()
@@ -50,13 +123,23 @@ class OmicsDataset:
 
     def detected_timepoint_counts(self, cond: str) -> list[int]:
         """
-        Count number of timepoints with detected values for each gene.
+        Count detected time points per gene for the requested condition.
 
-        Args:
-            cond (str): "cond1" or "cond2"
+        Parameters
+        ----------
+        cond : str
+            Either ``"cond1"`` or ``"cond2"`` specifying which condition to evaluate.
 
-        Returns:
-            list[int]: List of counts for each gene.
+        Returns
+        -------
+        list[int]
+            Number of distinct time points detected for each gene.
+
+        Raises
+        ------
+        ValueError
+            If ``cond`` is not a recognized condition label.
+
 
         """
         if cond == "cond1":
@@ -69,37 +152,29 @@ class OmicsDataset:
             text = f"Invalid condition: {cond}"  # satisfies EM101 (no string literal in raise)
             raise ValueError(text)
 
-        # y-like frame, boolean mask of non-NaN
-        mask = y.notna()  # shape: (n_rows, n_cols)
+        mask = y.notna()
 
-        # t_beta must be length n_cols and aligned to those columns
-        # Group columns by time, check if ANY non-NaN per group, then count groups per row
-        detected_timepoints = (
-            mask.T.groupby(t)
-            .any()  # (n_rows, n_unique_times) booleans
-            .T.sum(axis=1)  # per-row counts
-            .to_numpy()
-        )
+        detected_timepoints = mask.T.groupby(t).any().T.sum(axis=1).to_numpy()
 
         return detected_timepoints
 
     def add_detected_timepoint_counts(self) -> None:
-        """Add two columns to self.df with counts for cond1 and cond2."""
-        self.df["detected_cond1"] = self.detected_timepoint_counts("cond1")
-        self.df["detected_cond2"] = self.detected_timepoint_counts("cond2")
+        """Augment the DataFrame with detected time-point counts for each condition."""
+        self.df["detected_timepoints_cond1"] = self.detected_timepoint_counts("cond1")
+        self.df["detected_timepoints_cond2"] = self.detected_timepoint_counts("cond2")
 
     def add_mean_expression(self) -> None:
-        """Add two columns to self.df with mean expression for cond1 and cond2."""
+        """Compute mean expression for both conditions and store in the DataFrame."""
         self.df["mean_cond1"] = self.df[self.columns_cond1].mean(axis=1)
         self.df["mean_cond2"] = self.df[self.columns_cond2].mean(axis=1)
 
     def add_number_detected(self) -> None:
-        """Add two columns to self.df with number of detected values for cond1 and cond2."""
+        """Store the count of non-null measurements for each condition."""
         self.df["num_detected_cond1"] = self.df[self.columns_cond1].count(axis=1)
         self.df["num_detected_cond2"] = self.df[self.columns_cond2].count(axis=1)
 
     def deduplicate_genes(self) -> None:
-        """Deduplicate self.df by 'Genes', keeping entry with highest total mean expression."""
+        """Remove duplicate gene entries, keeping the highest combined mean expression."""
         if not {"mean_cond1", "mean_cond2"}.issubset(self.df):
             self.add_mean_expression()
 
@@ -117,9 +192,21 @@ class OmicsDataset:
         mean_min: float | None = None,
         num_detected_min: int | None = None,
     ) -> None:
-        """Add is_expressed_cond1/cond2 based on thresholds."""
-        # Ensure prerequisite columns exist
-        if not {"detected_cond1", "detected_cond2"}.issubset(self.df):
+        """
+        Flag genes as expressed based on configurable thresholds.
+
+        Parameters
+        ----------
+        detected_min : int | None, optional
+            Minimum detected time points required, by default ``None``.
+        mean_min : float | None, optional
+            Minimum mean expression required, by default ``None``.
+        num_detected_min : int | None, optional
+            Minimum number of detected samples required, by default ``None``.
+
+
+        """
+        if not {"detected_timepoints_cond1", "detected_timepoints_cond2"}.issubset(self.df):
             self.add_detected_timepoint_counts()
         if not {"mean_cond1", "mean_cond2"}.issubset(self.df):
             self.add_mean_expression()
@@ -127,7 +214,6 @@ class OmicsDataset:
             self.add_number_detected()
 
         def _mask(which: Literal["cond1", "cond2"]) -> pd.Series:
-            # start with all-True masks
             m_detected = pd.Series(True, index=self.df.index)
             m_mean = pd.Series(True, index=self.df.index)
             m_num = pd.Series(True, index=self.df.index)
@@ -144,10 +230,24 @@ class OmicsDataset:
         self.df["is_expressed_cond1"] = _mask("cond1")
         self.df["is_expressed_cond2"] = _mask("cond2")
 
-    def expression_histogram(self, bins: int = 20) -> None:
-        """Plot histogram of mean expression for cond1 and cond2."""
+    def expression_histogram(self, bins: int = 20) -> plt.Figure:
+        """
+        Plot histograms of mean expression for both conditions.
+
+        Parameters
+        ----------
+        bins : int, optional
+            Number of histogram bins, by default 20.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure containing the histogram panels.
+
+
+        """
         print(plt.rcParams["font.size"])
-        plt.figure(figsize=(6 / 2.54, 12 / 2.54))
+        fig = plt.figure(figsize=(6 / 2.54, 12 / 2.54))
         plt.subplot(2, 1, 1)
         plt.hist(self.df["mean_cond1"].to_numpy().flatten(), bins=bins)
         plt.xlabel("Mean Expression")
@@ -161,24 +261,54 @@ class OmicsDataset:
         plt.title(f"Mean expression ({self.cond2_label})")
         plt.gca().xaxis.set_major_locator(plt.MaxNLocator(nbins=10))
         plt.tight_layout()
-        plt.show()
 
-    def replicate_scatterplot(self, sample1: str, sample2: str) -> None:
-        """Scatterplot of two replicates."""
+        return fig
+
+    def replicate_scatterplot(self, sample1: str, sample2: str) -> plt.Figure:
+        """
+        Create a scatterplot comparing two samples with correlation annotations.
+
+        Parameters
+        ----------
+        sample1 : str
+            Column name of the first sample.
+        sample2 : str
+            Column name of the second sample.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure containing the scatter plot.
+
+        Raises
+        ------
+        ValueError
+            If either sample column is missing from the DataFrame.
+
+
+        """
         if sample1 not in self.df.columns or sample2 not in self.df.columns:
             text = f"Samples {sample1} and/or {sample2} not in DataFrame columns."
             raise ValueError(text)
 
-        plt.figure(figsize=(8 / 2.54, 8 / 2.54))
-        x: np.ndarray = self.df[sample1].to_numpy().flatten()
-        y: np.ndarray = self.df[sample2].to_numpy().flatten()
+        fig = plt.figure(figsize=(8 / 2.54, 8 / 2.54))
+        xy = self.df[[sample1, sample2]].dropna()
+        x: np.ndarray = xy[sample1].to_numpy().flatten()
+        y: np.ndarray = xy[sample2].to_numpy().flatten()
         r_pearson: float = np.corrcoef(x, y)[0, 1]
         r_spearman: float = spearmanr(x, y).statistic
         plt.scatter(x, y, alpha=0.1, s=4)
         plt.xlabel(sample1)
         plt.ylabel(sample2)
-        plt.title(f"{sample1} vs {sample2} (Pearson R = {r_pearson:.2f}, Spearman R = {r_spearman:.2f})")
+        plt.title(f"Pearson R = {r_pearson:.2f}, Spearman R = {r_spearman:.2f}")
         plt.axis("equal")
-        plt.plot([x.min(), x.max()], [x.min(), x.max()], color="grey", linestyle="--", alpha=0.8)
+        plt.plot(
+            [x.min(), x.max()],
+            [x.min(), x.max()],
+            color="grey",
+            linestyle="--",
+            alpha=0.8,
+        )
         plt.tight_layout()
-        plt.show()
+
+        return fig

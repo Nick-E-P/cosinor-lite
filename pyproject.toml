@@ -21,6 +21,7 @@ dependencies = [
     "pydantic>=2.11.9",
     "tqdm>=4.67.1",
     "openpyxl>=3.1.5",
+    "gradio>=5.50.0",
 ]
 name = "cosinor-lite"
 version = "0.0.0"
@@ -32,7 +33,12 @@ license = { text = "Apache-2.0" }
 classifiers = ["Programming Language :: Python :: 3"]
 
 [dependency-groups]
-dev = ["pytest", "pytest-cov", "ruff", "pre-commit"]
+dev = [
+    "pytest",
+ "pytest-cov",
+ "ruff",
+ "pre-commit",
+]
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
