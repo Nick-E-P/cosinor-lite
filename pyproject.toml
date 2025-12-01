@@ -20,6 +20,8 @@ dependencies = [
     "pingouin",
     "pydantic>=2.11.9",
     "tqdm>=4.67.1",
+    "openpyxl>=3.1.5",
+    "gradio>=5.50.0",
 ]
 name = "cosinor-lite"
 version = "0.0.0"
@@ -114,8 +116,6 @@ lint.ignore = [
     "FA102",   # Flake8-future-annotations - Missing `from __future__ import annotations`, but uses PEP 604 union
 ]
 
-# Avoid trying to fix flake8-bugbear (`B`) violations.
-#unfixable = ["B"]
 line-length = 119
 
 # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
@@ -126,8 +126,5 @@ line-length = 119
 [tool.ty.environment]
 root = "./src/cosinor_lite"
 
-# [tool.ty.rules]
-# invalid-type-form = "ignore"
-
-# [tool.uv.sources]
-# cosinor-lite = { workspace = true }
+[tool.interrogate]
+exclude = ["tests", "app.py"]
