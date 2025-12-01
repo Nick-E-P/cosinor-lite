@@ -33,12 +33,7 @@ license = { text = "Apache-2.0" }
 classifiers = ["Programming Language :: Python :: 3"]
 
 [dependency-groups]
-dev = [
-    "pytest",
- "pytest-cov",
- "ruff",
- "pre-commit",
-]
+dev = ["pytest", "pytest-cov", "ruff", "pre-commit"]
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
@@ -121,8 +116,6 @@ lint.ignore = [
     "FA102",   # Flake8-future-annotations - Missing `from __future__ import annotations`, but uses PEP 604 union
 ]
 
-# Avoid trying to fix flake8-bugbear (`B`) violations.
-#unfixable = ["B"]
 line-length = 119
 
 # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
@@ -133,8 +126,5 @@ line-length = 119
 [tool.ty.environment]
 root = "./src/cosinor_lite"
 
-# [tool.ty.rules]
-# invalid-type-form = "ignore"
-
-# [tool.uv.sources]
-# cosinor-lite = { workspace = true }
+[tool.interrogate]
+exclude = ["tests", "app.py"]
