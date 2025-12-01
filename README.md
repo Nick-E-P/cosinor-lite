@@ -5,7 +5,7 @@
 - **Interactive Gradio dashboard** to drag & drop your data files.
 - **Python package** for fine-grained customisation beyond the settings offered in the Gradio UI.
 
-🚀 Try the interactive analysis pipeline on  
+🚀 Try the interactive analysis pipeline on
 **[Hugging Face Spaces → cosinor-lite](https://huggingface.co/spaces/nick-e-p/cosinor-lite)**.
 
 ## Why `cosinor-lite?`
