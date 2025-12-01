@@ -1,9 +1,12 @@
 # cosinor-lite
 
-`cosinor-lite` is a lightweight toolkit for exploring circadian oscillations across multiomics and live-cell imaging experiments. It uses commonly used  statistical models with two options for use:
+`cosinor-lite` is a lightweight toolkit for exploring circadian oscillations across multiomics and live-cell imaging experiments. It relies on widely used statistical models and offers two modes of use.
 
 - **Interactive Gradio dashboard** to drag & drop your data files.
 - **Python package** for fine-grained customisation beyond the settings offered in the Gradio UI.
+
+🚀 Try the interactive analysis pipeline on  
+**[Hugging Face Spaces → cosinor-lite](https://huggingface.co/spaces/nick-e-p/cosinor-lite)**.
 
 ## Why `cosinor-lite?`
 
