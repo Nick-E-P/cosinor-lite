@@ -67,9 +67,11 @@ def test_linear_trend(bioluminescence_dataset: LiveCellDataset) -> None:
     mask = np.isfinite(x) & np.isfinite(y)
     x_valid = x[mask]
     y_valid = y[mask]
-    x_fit, y_fit = ds.linear_trend(x_valid, y_valid)
+    x_fit, y_fit, y_detrended = ds.linear_trend(x_valid, y_valid)
     assert x_fit.shape == y_fit.shape == x_valid.shape  # noqa: S101
     assert np.all(np.isfinite(y_fit))  # noqa: S101
+    assert y_detrended.shape == y_valid.shape  # noqa: S101
+    assert np.all(np.isfinite(y_detrended))  # noqa: S101
 
 
 def test_poly2_trend(bioluminescence_dataset: LiveCellDataset) -> None:
@@ -79,10 +81,12 @@ def test_poly2_trend(bioluminescence_dataset: LiveCellDataset) -> None:
     mask = np.isfinite(x) & np.isfinite(y)
     x_valid = x[mask]
     y_valid = y[mask]
-    x_fit, y_fit = ds.poly2_trend(x_valid, y_valid)
+    x_fit, y_fit, y_detrended = ds.poly2_trend(x_valid, y_valid)
     expected = np.polyval(np.polyfit(x_valid, y_valid, 2), x_valid)
     assert x_fit.shape == y_fit.shape == x_valid.shape  # noqa: S101
     assert np.allclose(y_fit, expected)  # noqa: S101
+    assert y_detrended.shape == y_valid.shape  # noqa: S101
+    assert np.all(np.isfinite(y_detrended))  # noqa: S101
 
 
 def test_moving_average_trend(bioluminescence_dataset: LiveCellDataset) -> None:
@@ -90,10 +94,12 @@ def test_moving_average_trend(bioluminescence_dataset: LiveCellDataset) -> None:
     x = ds.time
     y = ds.time_series[:, 0]
     mask = np.isfinite(x) & np.isfinite(y)
-    x_ma, y_ma = ds.moving_average_trend(x[mask], y[mask], window=3)
+    x_ma, y_ma, y_detrended = ds.moving_average_trend(x[mask], y[mask], window=3)
     assert len(x_ma) == len(y_ma)  # noqa: S101
     assert len(x_ma) > 0  # noqa: S101
     assert np.all(np.isfinite(y_ma))  # noqa: S101
+    assert y_detrended.shape == y_ma.shape  # noqa: S101
+    assert np.all(np.isfinite(y_detrended))  # noqa: S101
 
 
 def test_moving_average_trend_invalid_window(bioluminescence_dataset: LiveCellDataset) -> None:
@@ -112,10 +118,12 @@ def test_get_trend_methods(method: str, bioluminescence_dataset: LiveCellDataset
     mask = np.isfinite(x) & np.isfinite(y)
     x_valid = x[mask]
     y_valid = y[mask]
-    x_out, y_out = ds.get_trend(x_valid, y_valid, method=method, window=3)
+    x_out, y_out, y_detrended = ds.get_trend(x_valid, y_valid, method=method, window=3)
     assert isinstance(x_out, np.ndarray)  # noqa: S101
     assert isinstance(y_out, np.ndarray)  # noqa: S101
     assert x_out.shape == y_out.shape  # noqa: S101
+    assert isinstance(y_detrended, np.ndarray)  # noqa: S101
+    assert y_detrended.shape == y_out.shape  # noqa: S101
     if method != "moving_average":
         assert x_out.shape == x_valid.shape  # noqa: S101
     else:

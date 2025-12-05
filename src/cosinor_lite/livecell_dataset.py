@@ -167,7 +167,7 @@ class LiveCellDataset:
         data = self.time_series[:, mask]
         return ids, replicates, data
 
-    def linear_trend(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def linear_trend(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Fits a linear regression model to the provided data and returns the input x values along with the predicted linear trend.
 
@@ -180,15 +180,16 @@ class LiveCellDataset:
 
         Returns
         -------
-        tuple[np.ndarray, np.ndarray]
-            A tuple containing the original x values and the predicted linear fit values.
+        tuple[np.ndarray, np.ndarray, np.ndarray]
+            A tuple containing the original x values, the predicted linear fit values, and the detrended y values.
 
         """
         model = sm.OLS(y, sm.add_constant(x)).fit()
         linear_fit = model.predict(sm.add_constant(x))
-        return x, linear_fit
+        y_detrended = y - linear_fit + np.mean(y)
+        return x, linear_fit, y_detrended
 
-    def poly2_trend(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def poly2_trend(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Fits a second-degree polynomial (quadratic) trend to the given data.
 
@@ -197,16 +198,23 @@ class LiveCellDataset:
             y (np.ndarray): 1D array of dependent variable values.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]:
+            tuple[np.ndarray, np.ndarray, np.ndarray]:
                 - x: The input array of independent variable values.
                 - poly_fit: The fitted quadratic values corresponding to x.
+                - y_detrended: The detrended y values after removing the polynomial fit.
 
         """
         coeffs = np.polyfit(x, y, 2)
         poly_fit = np.polyval(coeffs, x)
-        return x, poly_fit
+        y_detrended = y - poly_fit + np.mean(y)
+        return x, poly_fit, y_detrended
 
-    def moving_average_trend(self, x: np.ndarray, y: np.ndarray, window: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    def moving_average_trend(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        window: int = 5,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Computes the moving average trend of the input data using a specified window size.
 
@@ -225,6 +233,7 @@ class LiveCellDataset:
             A tuple containing:
                 - x values corresponding to valid (finite) moving average points.
                 - The moving average values (trend) for the valid points.
+                - The detrended y values for the valid points.
 
         Raises
         ------
@@ -238,7 +247,8 @@ class LiveCellDataset:
         y_series = pd.Series(y)
         ma_fit = y_series.rolling(window=window, center=True).mean().to_numpy()
         good = np.isfinite(x) & np.isfinite(ma_fit)
-        return x[good], ma_fit[good]
+        y_detrended = y[good] - ma_fit[good] + np.mean(y[good])
+        return x[good], ma_fit[good], y_detrended
 
     def get_trend(
         self,
@@ -246,7 +256,7 @@ class LiveCellDataset:
         y: np.ndarray,
         method: str = "linear",
         window: int = 5,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Computes the trend of the given data using the specified method.
 
@@ -272,6 +282,7 @@ class LiveCellDataset:
             A tuple containing:
                 - The x values (possibly unchanged).
                 - The trend values corresponding to y.
+                - The detrended y values.
 
         Raises
         ------
@@ -280,7 +291,7 @@ class LiveCellDataset:
 
         """
         if method == "none":
-            return np.asarray(x, float), np.zeros_like(np.asarray(y, float))
+            return np.asarray(x, float), np.zeros_like(np.asarray(y, float)), np.asarray(y, float)
         if method == "linear":
             return self.linear_trend(x, y)
         if method == "poly2":
@@ -365,7 +376,7 @@ class LiveCellDataset:
                 x_fit = x[valid_mask]
                 y_fit = y[valid_mask]
 
-                x_processed, y_processed = self.get_trend(
+                x_processed, trend, _y_detrended = self.get_trend(
                     x_fit,
                     y_fit,
                     method=method,
@@ -374,7 +385,7 @@ class LiveCellDataset:
                 if method != "none":
                     ax.plot(
                         x_processed,
-                        y_processed,
+                        trend,
                         color="black",
                         linestyle="--",
                         linewidth=0.8,
