@@ -687,13 +687,12 @@ class CosinorAnalysis(LiveCellDataset):
                 x_fit = x_valid[range_mask]
                 y_fit = y_valid[range_mask]
 
-                x_processed, y_processed = self.get_trend(
+                x_processed, _y_trend, y_detrended = self.get_trend(
                     x_fit,
                     y_fit,
                     method=method,
                     window=window,
                 )
-                y_detrended = y_fit - y_processed + np.mean(y_fit)
 
                 if plot_style == "scatter":
                     ax.scatter(x_processed, y_detrended, s=4, alpha=0.8, color=color)

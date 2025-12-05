@@ -1,42 +1,45 @@
 name: CI
 
 on:
-    push:
-        branches:
-            - main
-    pull_request:
-        branches:
-            - main
-    workflow_dispatch: {}
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    ci:
-        runs-on: ubuntu-latest
+  ci:
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v7
-              with:
-                  version: "0.7.19"
-                  enable-cache: true
-                  cache-dependency-glob: |
-                      pyproject.toml
-                      uv.lock
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.7.19"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
-            - name: Install Python
-              run: uv python install
+      - name: Install Python
+        run: uv python install
 
-            - name: Install the project
-              run: uv sync --locked --all-extras --dev
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
 
-            - name: Lint (run.sh lint:ci)
-              run: uv run /bin/bash -x run.sh lint:ci
+      - name: Lint (run.sh lint:ci)
+        run: uv run /bin/bash -x run.sh lint:ci
 
-            - name: Tests (run.sh test:ci)
-              run: uv run /bin/bash -x run.sh test:ci
+      - name: Tests (run.sh test:ci)
+        run: uv run /bin/bash -x run.sh test:ci
+
+      - name: Build package
+        run: uv build
