@@ -11,7 +11,7 @@ docker-build:
 
 docker-run:
 	bash run.sh docker-run
-	
+
 help:
 	bash run.sh help
 
