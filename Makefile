@@ -6,6 +6,12 @@ build:
 clean:
 	bash run.sh clean
 
+docker-build:
+	bash run.sh docker-build
+
+docker-run:
+	bash run.sh docker-run
+	
 help:
 	bash run.sh help
 
