@@ -5,10 +5,10 @@ RUN pip install uv
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
+COPY src ./src
 
 RUN uv sync --frozen --all-extras --dev
 
-COPY src ./src
 COPY app.py ./app.py
 COPY run.sh ./run.sh
 COPY tests ./tests
