@@ -68,7 +68,9 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             # Fitting live cell data
 
             This section allows inference of parameters describing circadian oscillations in live cell data.
-            Once inferred, the extracted parameters can be compared between groups in downstream analyses. There are three types of cosinor model to choose from:
+            Once inferred, the extracted parameters can be compared between groups in downstream analyses. Methods are included at the bottom of the page for easy copy-pasting.
+
+            There are three types of cosinor model to choose from:
             - 24h period cosinor
             - Free period (constrained within 20-28h) cosinor
             - Damped cosinor (equivalent to Chronostar analysis), with an additional dampening coefficient
@@ -383,10 +385,56 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 ],
                 outputs=[plot_cosinor, pdf_export, table_export, download_export],
             )
+            gr.Markdown(
+                """
+            # Fitting Live Cell Data Methods (to paste and adapt as needed)
+
+            Live cell time series from X data were first detrended using:
+
+            - **Linear regression**: ordinary least-squares (statsmodels 0.14.1) was fit to the raw signal versus time, and the fitted mean-centered trend was subtracted to yield detrended residuals.
+            - **Quadratic regression**: a second-order polynomial was fit to the raw signal versus time (NumPy 1.26), and the fitted mean-centered trend was subtracted to yield detrended residuals.
+            - **Centered moving average**: a rolling mean (pandas 2.1.4) with a window of X hours was computed, and detrended values were obtained by subtracting the mean-centered trend from the raw data.
+
+
+            We extracted periodic parameters from the cell line data by fitting a cosinor model of the form (CHOOSE APPROPRIATE MODEL):
+
+            **24-h cosinor model**
+
+            $$
+            y(t) = \\text{mesor} + \\text{amplitude} \\cdot \\cos\\!\\left(\\frac{2\\pi (t - \\text{acrophase})}{24}\\right),
+            $$
+
+            where $y(t)$ represents the X signal and $t$ represents time in hours. The parameters mesor, amplitude, and acrophase correspond to the mean level, oscillation amplitude, and phase of peak expression, respectively. Model fitting was performed by minimizing the least-squares error using the `curve_fit` function from SciPy (v1.11.4).
+
+            **Free-period cosinor model**
+
+            $$
+            y(t) = \\text{mesor} + \\text{amplitude} \\cdot \\cos\\!\\left(\\frac{2\\pi (t - \\text{acrophase})}{\\text{period}}\\right),
+            $$
+
+            where $y(t)$ represents the X signal and $t$ represents time in hours. The parameters mesor, amplitude, acrophase, and period correspond to the mean level, oscillation amplitude, phase of peak expression, and oscillation period, respectively. Model fitting was performed by minimizing the least-squares error using the `curve_fit` function from SciPy (v1.11.4).
+
+            **Damped cosinor model**
+
+            To account for potential attenuation of oscillatory amplitude over time, we also considered a damped cosinor model with exponential decay,
+
+            $$
+            y(t) = \\text{mesor} + \\text{amplitude} \\cdot e^{-\\lambda t}
+            \\cos\\!\\left(\\frac{2\\pi (t - \\text{acrophase})}{\\text{period}}\\right),
+            $$
+
+            where $y(t)$ represents the X signal and $t$ represents time in hours. The parameters mesor, amplitude, acrophase, and period correspond to the mean level, oscillation amplitude, phase of peak expression, and oscillation period, respectively. The parameter $\\lambda$ is the damping coefficient controlling the rate of exponential decay of the oscillation amplitude. Model fitting was performed by minimizing the least-squares error using the `curve_fit` function from SciPy (v1.11.4).
+
+            """,
+                latex_delimiters=[
+                    {"left": "$$", "right": "$$", "display": True},
+                    {"left": "$", "right": "$", "display": False},
+                ],
+            )
         with gr.Tab("Omics", id=1):
             gr.Markdown(
                 """
-            # Differential rhytmicity analysis of omics datasets
+            # Differential rhythmicity analysis of omics datasets
 
             Here we perform differential rhythmicity analysis between two conditions using a model selection approach on omics data.
             The example data includes published RNA-seq data, but in theory any types of omics data (RNA-seq, proteomics, metabolomics, lipidomics) could be used. The dataset is from the following publication:
@@ -407,7 +455,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 """
             ## How does the method actually work?
 
-            The details of the method are nicely explained in the article:
+            Methods are included at the bottom of the page for easy copy-pasting. The details of the method are nicely explained in the article:
             > Pelikan A, Herzel H, Kramer A, Ananthasubramaniam B. 2022. Venn diagram analysis overestimates the extent of circadian rhythm reprogramming. The FEBS Journal 289:6605–6621. doi:10.1111/febs.16095
 
             See the above adaptation of their figure explaining the methodology.
@@ -720,7 +768,9 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 ],
                 outputs=[scatter_plot, scatter_download],
             )
-
+            gr.Markdown(
+                "Define a cutoff for expressed genes, based on mean expression or number of detected samples.",
+            )
             with gr.Row():
                 cond1_label_tb = gr.Textbox(
                     label="Condition 1 label",
@@ -732,6 +782,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 )
                 mean_min_num = gr.Number(
                     label="mean_min (for is_expressed)",
+                    value=0,
+                    precision=0,
+                )
+                num_detected_num = gr.Number(
+                    label="num_detected_min (for is_expressed)",
                     value=0,
                     precision=0,
                 )
@@ -759,6 +814,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 cond1_label: str,
                 cond2_label: str,
                 mean_min: float | None,
+                num_detected_min: float | None,
                 log2_option: str,
             ) -> tuple[plt.Figure | None, str | None, pd.DataFrame | None, str | None]:
                 if df is None or not cols_a or not cols_b:
@@ -789,7 +845,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     mean_min_value = float(mean_min) if mean_min is not None else 0.0
                 except (TypeError, ValueError):
                     mean_min_value = 0.0
-                rna_data.add_is_expressed(mean_min=mean_min_value)
+                try:
+                    num_detected_value = int(num_detected_min) if num_detected_min is not None else None
+                except (TypeError, ValueError):
+                    num_detected_value = None
+                rna_data.add_is_expressed(mean_min=mean_min_value, num_detected_min=num_detected_value)
 
                 dr = DifferentialRhythmicity(dataset=rna_data)
                 rhythmic_all = dr.extract_all_circadian_params()  # pandas DataFrame
@@ -830,6 +890,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     cond1_label_tb,
                     cond2_label_tb,
                     mean_min_num,
+                    num_detected_num,
                     log2_choice,
                 ],
                 outputs=[
@@ -837,6 +898,59 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     heatmap_download,
                     params_preview,
                     params_download,
+                ],
+            )
+            gr.Markdown(
+                """
+            ## Differential Rhythmicity Analysis Methods (to paste and adapt as needed)
+
+            Differential rhythmicity analysis was performed using harmonic linear regression and model selection based on the Bayesian Information Criterion (BIC) (Atger et al., 2015, Pelikan et al., 2022).
+
+            We used the harmonic linear regression model
+
+            $$
+            y(t) = m + a \\cos(\\omega t) + b \\sin(\\omega t),
+            $$
+
+            where $y(t)$ represents the log2-transformed values of either transcript or protein levels, $m$ is the mean level, $\\omega$ is the frequency of the oscillations (fixed to give a period of 24 h), $t$ is the time, and $a$ and $b$ are the regression coefficients of the cosine and sine terms, respectively.
+
+            We proposed five different models to represent different rhythmic categories. Model $M_1$ corresponds to arrhythmic behavior in both Condition 1 and Condition 2 cells. Model $M_2$ corresponds to rhythmicity in Condition 2 cells only, whereas model $M_3$ corresponds to rhythmicity in Condition 1 cells only. Model $M_4$ corresponds to rhythmicity in both Condition 1 and Condition 2 cells with identical rhythmic parameters (i.e. identical coefficients $a$ and $b$). Model $M_5$ corresponds to rhythmicity in both cell types with differential rhythmicity between Condition 1 and Condition 2 cells (i.e. different coefficients $a$ and $b$).
+
+            For each model $M_i$, the regression was performed and the BIC was calculated as
+
+            $$
+            \\mathrm{BIC}_i = k_i \\ln(n) - 2 \\ln(\\hat{L}_i),
+            $$
+
+            where $k_i$ is the number of parameters in model $M_i$, $n$ is the sample size, and $\\hat{L}_i$ is the maximized value of the likelihood function for model $M_i$.
+
+            For model comparison, the difference between the BIC of each model and the lowest BIC value among all models (denoted $\\mathrm{BIC}_{\\min}$) was computed as
+
+            $$
+            \\Delta_i = \\mathrm{BIC}_i - \\mathrm{BIC}_{\\min}.
+            $$
+
+            The Schwarz weight $w_i$ of each model was then calculated as
+
+            $$
+            w_i = \\frac{\\exp\\left(-\\tfrac{1}{2}\\Delta_i\\right)}{\\sum_i \\exp\\left(-\\tfrac{1}{2}\\Delta_i\\right)}.
+            $$
+
+            Genes were considered as detected if the mean log2 RPKM level was ≥ X, and proteins were considered as detected if at least Y out of Z samples had a detectable level. Detected status was denoted using several subclasses: subclass $a$, detected in Condition 1 cells only; subclass $b$, detected in Condition 2 cells only; and subclass $c$, detected in both Condition 1 and Condition 2 cells.
+
+            For each model there is an associated set of possible subclasses: model $M_1$ allows subclasses $a$, $b$, and $c$; model $M_2$ allows subclasses $b$ and $c$; model $M_3$ allows subclasses $a$ and $c$; model $M_4$ allows subclass $c$ only; model $M_5$ allows subclass $c$ only; and model $M_0$ allows subclass $c$ only.
+
+            To generate lists of oscillatory genes or proteins, we summed the model weights corresponding to rhythmic expression for the condition of interest. If this summed weight exceeded the Schwarz weight cutoff of 0.5, the feature was classified as oscillatory. For example, for Condition 1 cells, oscillatory features were those supported by models $M_3$, $M_4$, and $M_5$.
+
+            **References**
+
+            > Atger F, Gobet C, Marquis J, Martin E, Wang J, Weger B, Lefebvre G, Descombes P, Naef F, Gachon F. 2015. Circadian and feeding rhythms differentially affect rhythmic mRNA transcription and translation in mouse liver. Proceedings of the National Academy of Sciences 112:E6579–E6588. doi:10.1073/pnas.1515308112
+
+            > Pelikan A, Herzel H, Kramer A, Ananthasubramaniam B. 2022. Venn diagram analysis overestimates the extent of circadian rhythm reprogramming. The FEBS Journal 289:6605–6621. doi:10.1111/febs.16095
+            """,
+                latex_delimiters=[
+                    {"left": "$$", "right": "$$", "display": True},
+                    {"left": "$", "right": "$", "display": False},
                 ],
             )
 

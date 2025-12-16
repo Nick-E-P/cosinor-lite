@@ -103,3 +103,23 @@ def test_log2_transform_applies_to_measurements(omics_dataset: OmicsDataset) -> 
     actual = transformed.df[measurement_cols]
 
     assert np.allclose(actual.to_numpy(), expected.to_numpy(), equal_nan=True)  # noqa: S101
+
+
+def test_add_is_expressed_respects_num_detected_min(omics_dataset: OmicsDataset) -> None:
+    dataset = omics_dataset
+    # Force known counts by zeroing some entries
+    df_copy = dataset.df.copy()
+    cond1_cols = dataset.columns_cond1
+    df_copy.loc[:, cond1_cols] = np.nan
+    df_copy.loc[:, cond1_cols[:1]] = 10.0
+
+    test_ds = OmicsDataset(
+        df=df_copy,
+        columns_cond1=list(dataset.columns_cond1),
+        columns_cond2=list(dataset.columns_cond2),
+        t_cond1=dataset.t_cond1.copy(),
+        t_cond2=dataset.t_cond2.copy(),
+    )
+    test_ds.add_is_expressed(num_detected_min=2)
+
+    assert not test_ds.df["is_expressed_cond1"].any()  # noqa: S101
