@@ -47,6 +47,8 @@ class OmicsDataset:
         Display label for condition 2, by default ``"cond2"``.
     deduplicate_on_init : bool, optional
         Whether to deduplicate genes immediately after initialization, by default ``False``.
+    log2_transform : bool, optional
+        Whether to apply a log2(x + 1) transform to expression columns on init, by default ``False``.
 
     """
 
@@ -60,6 +62,7 @@ class OmicsDataset:
     cond2_label: str = "cond2"
 
     deduplicate_on_init: bool = False
+    log2_transform: bool = False
 
     @field_validator("t_cond1", "t_cond2", mode="before")
     @classmethod
@@ -115,11 +118,20 @@ class OmicsDataset:
 
     def __post_init__(self) -> None:
         """Populate derived columns and optionally deduplicate entries."""
+        if self.log2_transform:
+            self._apply_log2_transform()
         self.add_detected_timepoint_counts()
         self.add_mean_expression()
         self.add_number_detected()
         if self.deduplicate_on_init:
             self.deduplicate_genes()
+
+    def _apply_log2_transform(self) -> None:
+        """Apply a log2(x + 1) transform to measurement columns."""
+        measurement_cols = self.columns_cond1 + self.columns_cond2
+        numeric = self.df[measurement_cols].apply(pd.to_numeric, errors="coerce")
+        transformed = np.log2(numeric + 1.0)
+        self.df.loc[:, measurement_cols] = transformed
 
     def detected_timepoint_counts(self, cond: str) -> list[int]:
         """
@@ -247,7 +259,7 @@ class OmicsDataset:
 
         """
         print(plt.rcParams["font.size"])
-        fig = plt.figure(figsize=(6 / 2.54, 12 / 2.54))
+        fig = plt.figure(figsize=(8 / 2.54, 12 / 2.54))
         plt.subplot(2, 1, 1)
         plt.hist(self.df["mean_cond1"].to_numpy().flatten(), bins=bins)
         plt.xlabel("Mean Expression")

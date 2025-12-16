@@ -457,6 +457,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             )
             t_cond1_tb = gr.Textbox(label="t_cond1 (comma-separated)", visible=False)
             t_cond2_tb = gr.Textbox(label="t_cond2 (comma-separated)", visible=False)
+            log2_choice = gr.Radio(
+                choices=[("No", "no"), ("Yes", "yes")],
+                value="no",
+                label="Apply log2 transform to expression data?",
+            )
 
             st_df_rna = gr.State()
 
@@ -609,6 +614,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 use_manual_time: object,
                 t_a_text: str | None,
                 t_b_text: str | None,
+                log2_option: str,
             ) -> tuple[plt.Figure | None, str | None]:
                 if df is None:
                     return None, None
@@ -622,6 +628,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
                 t_a_array = np.asarray(t_a, dtype=float)
                 t_b_array = np.asarray(t_b, dtype=float)
+                apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
                     df=df,
@@ -630,6 +637,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     t_cond1=t_a_array,
                     t_cond2=t_b_array,
                     deduplicate_on_init=True,
+                    log2_transform=apply_log2,
                 )
 
                 fig = rna_data.expression_histogram()
@@ -649,6 +657,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     override_time,
                     t_cond1_tb,
                     t_cond2_tb,
+                    log2_choice,
                 ],
                 outputs=[omics_plot, omics_download],
             )
@@ -662,6 +671,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 t_b_text: str | None,
                 sample1: str | None,
                 sample2: str | None,
+                log2_option: str,
             ) -> tuple[plt.Figure | None, str | None]:
                 if df is None or not sample1 or not sample2:
                     return None, None
@@ -675,6 +685,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
                 t_a_array = np.asarray(t_a, dtype=float)
                 t_b_array = np.asarray(t_b, dtype=float)
+                apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
                     df=df,
@@ -683,6 +694,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     t_cond1=t_a_array,
                     t_cond2=t_b_array,
                     deduplicate_on_init=True,
+                    log2_transform=apply_log2,
                 )
 
                 fig = rna_data.replicate_scatterplot(sample1=sample1, sample2=sample2)
@@ -704,6 +716,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     t_cond2_tb,
                     sample1_dd,
                     sample2_dd,
+                    log2_choice,
                 ],
                 outputs=[scatter_plot, scatter_download],
             )
@@ -746,6 +759,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 cond1_label: str,
                 cond2_label: str,
                 mean_min: float | None,
+                log2_option: str,
             ) -> tuple[plt.Figure | None, str | None, pd.DataFrame | None, str | None]:
                 if df is None or not cols_a or not cols_b:
                     return None, None, None, None
@@ -759,6 +773,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
                 t_a_array = np.asarray(t_a, dtype=float)
                 t_b_array = np.asarray(t_b, dtype=float)
+                apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
                     df=df,
@@ -767,6 +782,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     t_cond1=t_a_array,
                     t_cond2=t_b_array,
                     deduplicate_on_init=True,
+                    log2_transform=apply_log2,
                 )
 
                 try:
@@ -814,6 +830,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     cond1_label_tb,
                     cond2_label_tb,
                     mean_min_num,
+                    log2_choice,
                 ],
                 outputs=[
                     heatmap_plot,

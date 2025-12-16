@@ -83,3 +83,23 @@ def test_replicate_scatterplot_title_matches_correlations(omics_dataset: OmicsDa
         assert figure.axes[0].get_title() == expected_title  # noqa: S101
     finally:
         plt.close(figure)
+
+
+def test_log2_transform_applies_to_measurements(omics_dataset: OmicsDataset) -> None:
+    dataset = omics_dataset
+    measurement_cols = dataset.columns_cond1 + dataset.columns_cond2
+    transformed = OmicsDataset(
+        df=dataset.df.copy(),
+        columns_cond1=list(dataset.columns_cond1),
+        columns_cond2=list(dataset.columns_cond2),
+        t_cond1=dataset.t_cond1.copy(),
+        t_cond2=dataset.t_cond2.copy(),
+        cond1_label=dataset.cond1_label,
+        cond2_label=dataset.cond2_label,
+        log2_transform=True,
+    )
+
+    expected = np.log2(dataset.df[measurement_cols].astype(float) + 1.0)
+    actual = transformed.df[measurement_cols]
+
+    assert np.allclose(actual.to_numpy(), expected.to_numpy(), equal_nan=True)  # noqa: S101
