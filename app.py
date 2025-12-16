@@ -34,6 +34,7 @@ plt.style.use("seaborn-v0_8-ticks")
 APP_DIR = Path(__file__).parent
 bioluminescence_file = str(APP_DIR / "data" / "bioluminescence_example.csv")
 cytokine_file = str(APP_DIR / "data" / "cytokine_example.csv")
+qpcr_file = str(APP_DIR / "data" / "qpcr_example.csv")
 omics_example = str(APP_DIR / "data" / "GSE95156_Alpha_Beta.txt")
 method_img = str(APP_DIR / "images" / "live_cell_fitting-01.png")
 model_selection_img = str(APP_DIR / "images" / "model_selection.png")
@@ -43,11 +44,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
         """
     # Cosinor Analysis App
 
-    A simple app for circadian cosinor analysis & biostatistics.
+    `cosinor-lite`: a simple app for circadian cosinor analysis & biostatistics.
 
-    Choose between:
-    - inferring rhythmic properties of live cell data using three different cosinor models
-    - differential rhythmicity analysis of omics datasets
+    Choose between the `Live cell` and `Omics` tabs for two different types of analysis:
+    - `Live cell`: inferring rhythmic properties of live cell data using three different cosinor models
+    - `Omics`: differential rhythmicity analysis of omics datasets between two conditions
 
     """,
     )
@@ -66,18 +67,27 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 """
             # Fitting live cell data
 
-            This section allows the use to infer parameters describing circadian oscillations in live cell data.
+            This section allows inference of parameters describing circadian oscillations in live cell data.
             Once inferred, the extracted parameters can be compared between groups in downstream analyses. There are three types of cosinor model to choose from:
             - 24h period cosinor
             - Free period (constrained within 20-28h) cosinor
             - Damped cosinor (equivalent to Chronostar analysis), with an additional dampening coefficient
 
-            There are many valid ways to organise the underlying live cell data file. Here we assume a specific format to facilitate data processing
+            ## Input data format
 
-            - Row 1: contains a unique identifier for the participant, mouse etc.
+            There are many valid ways to organise the underlying live cell data file. Here we assume a specific format to facilitate data processing.
+            If in doubt, you can download the example files and match the format of your input data accordingly.
+
+            - Row 1: contains a unique identifier for the participant ID, mouse ID etc.
             - Row 2: replicate number. If there's only one replicate per unique ID, this can just be a row of 1's
-            - Row 3: the group to which each measurement belongs
+            - Row 3: the group to which each measurement belongs (maximum of two groups allowed)
             - Left column; the left column contains the time (going down)
+
+            ## Recommended workflow for examples
+
+            - Bioluminescence: Detrending method: Moving average | Cosinor model: Damped cosinor (Chronostar)
+            - Cytokine: Detrending method: Linear | Cosinor model: Free period cosinor
+            - qPCR: Detrending method: None | Cosinor model: 24h period cosinor
 
             """,
             )
@@ -85,18 +95,21 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             file = gr.File(label="Upload CSV", file_types=[".csv"], type="filepath")
 
             gr.Examples(
-                examples=[bioluminescence_file, cytokine_file],
+                examples=[bioluminescence_file, cytokine_file, qpcr_file],
                 inputs=file,
                 label="Example input",
             )
 
             status = gr.Textbox(label="CSV status", interactive=False)
 
+            gr.Markdown(
+                "Provide the names of your two groups below, as they appear in row 3 of your CSV file.",
+            )
+
             with gr.Row():
                 group1_label = gr.Textbox(label="Group 1 label", value="Group 1")
                 group2_label = gr.Textbox(label="Group 2 label", value="Group 2")
 
-            # State (values will be pandas / numpy objects, not components)
             st_participant_id = gr.State()
             st_replicate = gr.State()
             st_group = gr.State()
@@ -113,7 +126,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 np.ndarray,
                 pd.DataFrame,
             ]:
-                # If needed, normalize FileData dict -> str path here
                 df_data = pd.read_csv(fpath, index_col=0, header=None)
 
                 participant_id = df_data.iloc[0, :].astype(str)
@@ -129,12 +141,9 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
                 time_rows = df_data.iloc[3:].apply(pd.to_numeric, errors="raise")
 
-                shape_info = (
-                    f"Loaded shape: {df_data.shape} | participants: {len(participant_id)} | time points: {len(time)}"
-                )
+                shape_info = f"Total loaded shape of metadata + data: {df_data.shape} | {len(participant_id)} samples x {len(time)} time points"
                 return shape_info, participant_id, replicate, group, time, time_rows
 
-            # Trigger on both upload and change (Examples sets the value via change)
             for evt in (file.upload, file.change):
                 evt(
                     process_csv,
@@ -432,7 +441,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
             omics_status = gr.Textbox(label="File status", interactive=False)
 
-            # Multiselects for choosing columns by header names
             columns_cond1_dd = gr.Dropdown(
                 choices=[],
                 multiselect=True,
@@ -444,7 +452,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 label="Condition B columns (e.g., ZT_*_b_*)",
             )
 
-            # Optional manual time vectors
             override_time = gr.Checkbox(
                 label="Override time vectors manually?",
                 value=False,
@@ -452,14 +459,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             t_cond1_tb = gr.Textbox(label="t_cond1 (comma-separated)", visible=False)
             t_cond2_tb = gr.Textbox(label="t_cond2 (comma-separated)", visible=False)
 
-            # Hidden state to stash the DataFrame
             st_df_rna = gr.State()
 
-            # Preview planned inputs for your class
             omics_preview = gr.Code(label="Planned class inputs", language="python")
             build_omics_btn = gr.Button("Build Omics inputs", variant="primary")
 
-            # Sample dropdowns for replicate scatterplot
             sample1_dd = gr.Dropdown(choices=[], label="Sample 1 (x-axis)")
             sample2_dd = gr.Dropdown(choices=[], label="Sample 2 (y-axis)")
             scatter_btn = gr.Button(
@@ -469,12 +473,10 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             scatter_plot = gr.Plot(label="Replicate scatterplot")
             scatter_download = gr.File(label="Download scatterplot")
 
-            # Histogram outputs
             hist_btn = gr.Button("Generate histogram", variant="primary")
             omics_plot = gr.Plot(label="Expression histogram")
             omics_download = gr.File(label="Download histogram")
 
-            # ---------- helpers ----------
             def _guess_cols(cols: Sequence[str]) -> tuple[list[str], list[str]]:
                 cols = [str(c) for c in cols]
                 a_guess = [c for c in cols if re.search(r"_a_", str(c))]
@@ -491,7 +493,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             def _pick_default_samples(
                 cols: Sequence[str],
             ) -> tuple[str | None, str | None]:
-                # Try ZT_0 ... _1 and ZT_0 ... _2 as a sensible default pair
                 s1 = next((c for c in cols if re.search(r"ZT_0_.*_1$", str(c))), None)
                 s2 = next((c for c in cols if re.search(r"ZT_0_.*_2$", str(c))), None)
                 if s1 and s2 and s1 != s2:
@@ -509,16 +510,14 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 reps = max(1, (n_cols + len(base) - 1) // len(base))
                 return [float(value) for value in (base * reps)[:n_cols]]
 
-            # ---------- loaders & toggles ----------
             def load_omics(
                 fpath: str | Path,
             ) -> tuple[object, object, object, pd.DataFrame, object, object, object, object]:
-                # Read TSV (tab-separated). Pandas also handles CSV if present.
                 dataframe = pd.read_csv(fpath, sep="\t")
-                # Drop first column by index (your pipeline)
+
                 if dataframe.shape[1] > 0:
                     dataframe = dataframe.drop(dataframe.columns[0], axis=1)
-                # Create Genes column from gene_name if present
+
                 if "gene_name" in dataframe.columns:
                     dataframe["Genes"] = dataframe["gene_name"].astype(str).str.split("|").str[1]
 
@@ -565,7 +564,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 outputs=[t_cond1_tb, t_cond2_tb],
             )
 
-            # ---------- preview inputs for your future class ----------
             def build_omics_inputs(  # noqa: PLR0913
                 df: pd.DataFrame | None,
                 cols_a: Sequence[str] | None,
@@ -596,16 +594,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
         columns_cond2 = {cols_b}
         t_cond1 = {t_a}
         t_cond2 = {t_b}
-
-        # Example construction (later):
-        # rna_data = OmicsDataset(
-        #     df=df_rna,
-        #     columns_cond1=columns_cond1,
-        #     columns_cond2=columns_cond2,
-        #     t_cond1=t_cond1,
-        #     t_cond2=t_cond2,
-        #     deduplicate_on_init=True,
-        # )
         """
                 return snippet
 
@@ -622,7 +610,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 outputs=omics_preview,
             )
 
-            # ---------- histogram ----------
             def run_histogram(  # noqa: PLR0913
                 df: pd.DataFrame | None,
                 cols_a: Sequence[str] | None,
@@ -674,7 +661,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 outputs=[omics_plot, omics_download],
             )
 
-            # ---------- replicate scatterplot ----------
             def run_replicate_scatter(  # noqa: PLR0913
                 df: pd.DataFrame | None,
                 cols_a: Sequence[str] | None,
@@ -730,13 +716,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 outputs=[scatter_plot, scatter_download],
             )
 
-            # ------------------------------------------------------------
-            # Differential rhythmicity + heatmap
-            # (Paste this inside your existing `with gr.Tab("Omics", id=1):` block)
-            # Re-uses helpers: _build_time_vec, and states/components you already created.
-            # ------------------------------------------------------------
-
-            # Labels for the heatmap and expressed-threshold
             with gr.Row():
                 cond1_label_tb = gr.Textbox(
                     label="Condition 1 label",
@@ -757,7 +736,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 variant="primary",
             )
 
-            # Outputs
             heatmap_plot = gr.Plot(label="Heatmap preview")
             heatmap_download = gr.File(label="Download heatmap (PDF)")
             params_preview = gr.Dataframe(
@@ -778,21 +756,18 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 mean_min: float | None,
             ) -> tuple[plt.Figure | None, str | None, pd.DataFrame | None, str | None]:
                 if df is None or not cols_a or not cols_b:
-                    # Nothing to do yet
                     return None, None, None, None
 
                 cols_a = list(cols_a or [])
                 cols_b = list(cols_b or [])
                 manual_flag = bool(use_manual_time)
 
-                # Build time vectors (reuse your helper)
                 t_a = _build_time_vec(len(cols_a), t_a_text if manual_flag else None)
                 t_b = _build_time_vec(len(cols_b), t_b_text if manual_flag else None)
 
                 t_a_array = np.asarray(t_a, dtype=float)
                 t_b_array = np.asarray(t_b, dtype=float)
 
-                # Construct dataset
                 rna_data = OmicsDataset(
                     df=df,
                     columns_cond1=cols_a,
@@ -802,18 +777,15 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     deduplicate_on_init=True,
                 )
 
-                # Mark expressed genes
                 try:
                     mean_min_value = float(mean_min) if mean_min is not None else 0.0
                 except (TypeError, ValueError):
                     mean_min_value = 0.0
                 rna_data.add_is_expressed(mean_min=mean_min_value)
 
-                # Differential rhythmicity
                 dr = DifferentialRhythmicity(dataset=rna_data)
                 rhythmic_all = dr.extract_all_circadian_params()  # pandas DataFrame
 
-                # Build heatmap
                 heatmap = OmicsHeatmap(
                     df=rhythmic_all,
                     columns_cond1=cols_a,
@@ -826,19 +798,14 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 )
                 fig = heatmap.plot_heatmap()  # should return a Matplotlib Figure
 
-                # Save outputs for download
-
-                # Heatmap PDF
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                     fig.savefig(tmp_pdf.name)
                     tmp_pdf_path = tmp_pdf.name
 
-                # Rhythmic params CSV
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_csv:
                     rhythmic_all.to_csv(tmp_csv.name, index=False)
                     tmp_csv_path = tmp_csv.name
 
-                # For preview table, show up to 200 rows to keep UI snappy
                 preview_df = rhythmic_all.head(20)
 
                 return fig, tmp_pdf_path, preview_df, tmp_csv_path
