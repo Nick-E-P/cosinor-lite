@@ -50,7 +50,7 @@ class LiveCellDataset:
         poly2_trend(x, y): Fits a second-order polynomial trend to the data.
         moving_average_trend(x, y, window): Computes a moving average trend.
         get_trend(x, y, method, window): Applies the specified detrending method.
-        plot_group_data(group, method, window, m, plot_style): Plots time series data for the specified group.
+        plot_group_data(group, method, window, m, plot_style): Plots time series data for the specified group and exports detrended values.
 
     """
 
@@ -308,7 +308,7 @@ class LiveCellDataset:
         window: int = 5,
         m: int = 5,
         plot_style: str = "scatter",
-    ) -> tuple[plt.Figure, str]:
+    ) -> tuple[plt.Figure, str, str]:
         """
         Plots data for a specified group, with options for trend fitting and plot style.
 
@@ -332,6 +332,8 @@ class LiveCellDataset:
             The matplotlib Figure object containing the plots.
         tmp_path : str
             The path to the saved temporary PDF file of the figure.
+        csv_path : str
+            The path to a temporary CSV containing detrended data in input-like layout.
 
         Raises
         ------
@@ -340,32 +342,39 @@ class LiveCellDataset:
 
         """
         if group == "group1":
-            ids, _replicates, data = self.get_group1_ids_replicates_data()
+            ids, replicates, data = self.get_group1_ids_replicates_data()
             color = self.color_group1
             group_label = self.group1_label
         elif group == "group2":
-            ids, _replicates, data = self.get_group2_ids_replicates_data()
+            ids, replicates, data = self.get_group2_ids_replicates_data()
             color = self.color_group2
             group_label = self.group2_label
         else:
             msg = "group must be 'group1' or 'group2'"
             raise ValueError(msg)
 
-        n_group = len(np.unique(ids))
+        ids_array = np.array(ids)
+        replicates_array = np.array(replicates)
+        n_group = len(np.unique(ids_array))
         n_cols = m
         n_rows = int(np.ceil(n_group / n_cols))
 
-        study_list = np.unique(ids).tolist()
+        study_list = np.unique(ids_array).tolist()
         fig = plt.figure(figsize=(5 * n_cols / 2.54, 5 * n_rows / 2.54))
 
+        detrended_matrix = np.full_like(data, np.nan, dtype=float)
+
         for i, id_curr in enumerate(study_list):
-            mask = np.array(ids) == id_curr
+            mask = ids_array == id_curr
             n_reps = int(np.sum(mask))
             ax = fig.add_subplot(n_rows, n_cols, i + 1)
 
+            col_indices = np.where(mask)[0]
+
             for j in range(n_reps):
                 x = self.time
-                y = data[:, mask][:, j]
+                col_idx = col_indices[j]
+                y = data[:, col_idx]
 
                 if plot_style == "scatter":
                     ax.scatter(x, y, s=4, alpha=0.8, color=color)
@@ -376,12 +385,18 @@ class LiveCellDataset:
                 x_fit = x[valid_mask]
                 y_fit = y[valid_mask]
 
-                x_processed, trend, _y_detrended = self.get_trend(
+                x_processed, trend, y_detrended = self.get_trend(
                     x_fit,
                     y_fit,
                     method=method,
                     window=window,
                 )
+                detrended_full = np.full_like(x, np.nan, dtype=float)
+                for x_val, y_val in zip(x_processed, y_detrended, strict=False):
+                    idx_candidates = np.where(np.isclose(x, x_val))[0]
+                    if idx_candidates.size:
+                        detrended_full[idx_candidates[0]] = y_val
+                detrended_matrix[:, col_idx] = detrended_full
                 if method != "none":
                     ax.plot(
                         x_processed,
@@ -403,4 +418,23 @@ class LiveCellDataset:
 
         fig.savefig(tmp_path)
 
-        return fig, tmp_path
+        csv_fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(csv_fd)
+
+        column_labels = [f"col_{i + 1}" for i in range(detrended_matrix.shape[1])]
+        table_rows = [
+            np.array(ids_array, dtype=object),
+            np.array(replicates_array, dtype=object),
+            np.array([group_label] * detrended_matrix.shape[1], dtype=object),
+        ]
+        table_rows.extend(detrended_matrix.astype(object))
+        index_labels = [
+            "participant_id",
+            "replicate",
+            "group",
+            *[float(t) for t in self.time],
+        ]
+        export_df = pd.DataFrame(table_rows, index=index_labels, columns=column_labels)
+        export_df.to_csv(csv_path, index=True, header=False, na_rep="")
+
+        return fig, tmp_path, csv_path

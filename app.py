@@ -184,7 +184,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 window: float,
                 m: float,
                 plot_style: str,
-            ) -> tuple[plt.Figure | None, str | None]:
+            ) -> tuple[plt.Figure | None, str | None, str | None]:
                 if (
                     ids_series is None
                     or group_series is None
@@ -192,7 +192,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     or time_array is None
                     or time_rows_df is None
                 ):
-                    return None, None
+                    return None, None, None
                 ds = LiveCellDataset(
                     ids=list(ids_series),
                     group=list(group_series),
@@ -203,7 +203,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     group2_label=g2,
                 )
                 if method == "moving_average":
-                    fig, pdf_path = ds.plot_group_data(
+                    fig, pdf_path, csv_path = ds.plot_group_data(
                         which_group,
                         method=method,
                         m=int(m),
@@ -211,13 +211,13 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                         plot_style=plot_style,
                     )
                 else:
-                    fig, pdf_path = ds.plot_group_data(
+                    fig, pdf_path, csv_path = ds.plot_group_data(
                         which_group,
                         method=method,
                         m=int(m),
                         plot_style=plot_style,
                     )
-                return fig, pdf_path
+                return fig, pdf_path, csv_path
 
             method_choice = gr.Radio(
                 choices=[
@@ -250,6 +250,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             build_btn = gr.Button("Plot raw data and trend", variant="primary")
             plot = gr.Plot(label="Preview")
             download = gr.File(label="Download plot")
+            detrended_download = gr.File(label="Download detrended CSV")
 
             build_btn.click(
                 make_plot,
@@ -267,7 +268,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     m_slider,
                     plot_style_choice,
                 ],
-                outputs=[plot, download],
+                outputs=[plot, download, detrended_download],
             )
 
             cosinor_model = gr.Radio(
@@ -387,10 +388,10 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 """
             # Differential rhytmicity analysis of omics datasets
 
-            Here we perform differential rhythmicity analysis on omics data using a model selection approach.
+            Here we perform differential rhythmicity analysis between two conditions using a model selection approach on omics data.
             The example data includes published RNA-seq data, but in theory any types of omics data (RNA-seq, proteomics, metabolomics, lipidomics) could be used. The dataset is from the following publication:
 
-            Petrenko V, Saini C, Giovannoni L, Gobet C, Sage D, Unser M, Heddad Masson M, Gu G, Bosco D, Gachon F, Philippe J, Dibner C. 2017. Pancreatic alpha- and beta-cellular clocks have distinct molecular properties and impact on islet hormone secretion and gene expression. Genes Dev 31:383-398. doi:10.1101/gad.290379.116.
+            > Petrenko V, Saini C, Giovannoni L, Gobet C, Sage D, Unser M, Heddad Masson M, Gu G, Bosco D, Gachon F, Philippe J, Dibner C. 2017. Pancreatic alpha- and beta-cellular clocks have distinct molecular properties and impact on islet hormone secretion and gene expression. Genes Dev 31:383-398. doi:10.1101/gad.290379.116.
                 """,
             )
 
@@ -399,7 +400,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 label="Differential rhytmicity analysis with model selection",
                 interactive=False,
                 show_label=True,
-                height=600,  # adjust as needed; or remove to use natural size
+                height=600,
             )
 
             gr.Markdown(
@@ -407,18 +408,17 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             ## How does the method actually work?
 
             The details of the method are nicely explained in the article:
-
-            Pelikan A, Herzel H, Kramer A, Ananthasubramaniam B. 2022. Venn diagram analysis overestimates the extent of circadian rhythm reprogramming. The FEBS Journal 289:6605-6621. doi:10.1111/febs.16095
+            > Pelikan A, Herzel H, Kramer A, Ananthasubramaniam B. 2022. Venn diagram analysis overestimates the extent of circadian rhythm reprogramming. The FEBS Journal 289:6605–6621. doi:10.1111/febs.16095
 
             See the above adaptation of their figure explaining the methodology.
 
-            For condition 1 (i.e. alpha cells) and condition 2 (i.e. beta cells), we fit five different models:
+            For condition 1 (i.e. cell type 1) and condition 2 (i.e. cell type 2), we fit five different models:
 
-            - Model 1) Arrhythmic in alpha and beta cells
-            - Model 2) Rhythmic in beta cells only
-            - Model 3) Rhythmic in alpha cells only
-            - Model 4) Rhythmic in alpha and beta cells with the same rhythmic parameters (i.e. phase and amplitude)
-            - Model 5) Rhythmic in both but with differential rhythmicity in alpha vs beta cells
+            - Model 1) Arrhythmic in cell type 1 and cell type 2
+            - Model 2) Rhythmic in cell type 2 only
+            - Model 3) Rhythmic in cell type 1 only
+            - Model 4) Rhythmic in cell type 1 and cell type 2 with the same rhythmic parameters (i.e. phase and amplitude)
+            - Model 5) Rhythmic in both but with differential rhythmicity in cell type 1 vs cell type 2
 
             A degree of confidence is calculated for each model (called model weight, which sums to 1 across all models), and a model is chosen if the model weight exceeds a threshold (for this tutorial we will use 0.5). If no model exceeds this threshold, then the model is unclassified, which we define as Model 0.
 
@@ -427,7 +427,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 """,
             )
 
-            # File input + example
             omics_file = gr.File(
                 label="Upload Omics TXT/TSV",
                 file_types=[".txt", ".tsv", ".csv"],
@@ -481,13 +480,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 cols = [str(c) for c in cols]
                 a_guess = [c for c in cols if re.search(r"_a_", str(c))]
                 b_guess = [c for c in cols if re.search(r"_b_", str(c))]
-
-                def zt_key(col: str) -> int:
-                    m = re.search(r"ZT_(\d+)", str(col))
-                    return int(m.group(1)) if m else 0
-
-                a_guess = sorted(a_guess, key=zt_key)
-                b_guess = sorted(b_guess, key=zt_key)
                 return a_guess, b_guess
 
             def _pick_default_samples(
@@ -589,7 +581,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     t_b_text if manual_flag else None,
                 )
 
-                snippet = f"""# Planned inputs for your Omics class
+                snippet = f"""# Planned inputs for the Omics dataset class
         columns_cond1 = {cols_a}
         columns_cond2 = {cols_b}
         t_cond1 = {t_a}

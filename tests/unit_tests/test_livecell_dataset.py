@@ -141,9 +141,12 @@ def test_get_trend_invalid_method(bioluminescence_dataset: LiveCellDataset) -> N
 
 @pytest.mark.parametrize("group", ["group1", "group2"])
 def test_plot_group_data(bioluminescence_dataset: LiveCellDataset, group: str) -> None:
-    fig, tmp_path = bioluminescence_dataset.plot_group_data(group=group, method="linear", plot_style="scatter")
+    fig, tmp_path, csv_path = bioluminescence_dataset.plot_group_data(
+        group=group, method="linear", plot_style="scatter"
+    )
     assert hasattr(fig, "savefig")  # noqa: S101
     assert tmp_path.endswith(".pdf")  # noqa: S101
+    assert csv_path.endswith(".csv")  # noqa: S101
 
 
 def test_plot_group_data_invalid_group(bioluminescence_dataset: LiveCellDataset) -> None:
