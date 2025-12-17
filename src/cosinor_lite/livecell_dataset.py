@@ -247,7 +247,7 @@ class LiveCellDataset:
         y_series = pd.Series(y)
         ma_fit = y_series.rolling(window=window, center=True).mean().to_numpy()
         good = np.isfinite(x) & np.isfinite(ma_fit)
-        y_detrended = y[good] - ma_fit[good] + np.mean(y[good])
+        y_detrended = y[good] - ma_fit[good]  # + np.mean(y[good])
         return x[good], ma_fit[good], y_detrended
 
     def get_trend(

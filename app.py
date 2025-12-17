@@ -393,7 +393,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
             - **Linear regression**: ordinary least-squares (statsmodels 0.14.1) was fit to the raw signal versus time, and the fitted mean-centered trend was subtracted to yield detrended residuals.
             - **Quadratic regression**: a second-order polynomial was fit to the raw signal versus time (NumPy 1.26), and the fitted mean-centered trend was subtracted to yield detrended residuals.
-            - **Centered moving average**: a rolling mean (pandas 2.1.4) with a window of X hours was computed, and detrended values were obtained by subtracting the mean-centered trend from the raw data.
+            - **Centered moving average**: a rolling mean (pandas 2.1.4) with a window of X hours was computed, and detrended values were obtained by subtracting the trend from the raw data.
 
 
             We extracted periodic parameters from the cell line data by fitting a cosinor model of the form (CHOOSE APPROPRIATE MODEL):
