@@ -10,7 +10,7 @@
 
 ## Why `cosinor-lite?`
 
-- **Unified workflow for live cell data**: Perform detrending and fit cosinor models with either a fixed 24 h, free-period or damped oscillation with consistent APIs across data modalities (i.e. bioluminescence, cytokines etc.).
+- **Unified workflow for live cell data**: Perform detrending and fit cosinor models with either a fixed 24 h, free-period or damped oscillation with consistent APIs across data modalities (i.e. bioluminescence, cytokines, qPCR etc.).
 - **Differential rhythmicity across any omics type**: Compare two conditions for differential rhythmicity for any type of omics data using BIC model-selection strategies with widespread use in the circadian literature.
 - **Create publication-ready analysis with a simple UI**: Launch a browser-based analysis console for visual quality control, plots, and parameter export.
 
@@ -42,6 +42,8 @@ Here is an adaptation of their figure explaining the methdology:
   <img src="./images/model_selection.png" alt="Model selection" style="width:60%;"/>
 </div>
 
+The tool is very similar to the dryR package in R, but implemented in Python for ease of use with other Python-based data analysis pipelines. Please see the dryR tool for more details, and if you prefer implementing in R (https://github.com/naef-lab/dryR/tree/master).
+
 For condition 1 (i.e. alpha cells) and condition 2 (i.e. beta cells), we fit 5 different models:
 
 - Model 1) Arrhythmic in alpha and beta cells
@@ -67,8 +69,6 @@ uv sync
 # activate the environment
 source .venv/bin/activate
 ```
-
-> **Tip:** The project targets Python 3.11+. Using `uv` keeps package resolution reproducible via `uv.lock`.
 
 ## Quick Start
 
@@ -102,32 +102,14 @@ fit = analysis.fit(group="treated", model="damped")
 print(fit.parameters)
 ```
 
-## Repository Layout
-
-```
-src/cosinor_lite/        # Core library modules and models
-app.py                   # Gradio application entry point
-tests/                   # Pytest suites (unit, integration, fixtures)
-data/                    # Example datasets for the app
-images/                  # Illustration assets used in the UI
-```
-
-## Development Workflow
-
-```bash
-# run style, type, and security hooks
-pre-commit run --all-files
-
-# execute unit tests
-uv run pytest
-```
 
 ## Sample Datasets
 
 The `data/` directory includes curated examples to help you get started:
 
 - `bioluminescence_example.csv`: Bioluminescence time series for live-cell analysis.
-- `cytokine_example.csv`: An alternative CSV with the same schema for cosinor fitting using cytokine data.
+- `cytokine_example.csv`: Cytokine time series for live-cell analysis.
+- `qpcr_example.csv`: qPCR time series for live-cell analysis.
 - `GSE95156_Alpha_Beta.txt`: RNA-seq data used in the omics differential rhythmicity workflow.
 
 Each file is formatted to drag & drop into `app.py` as well as the library APIs.

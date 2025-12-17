@@ -177,8 +177,8 @@ class OmicsDataset:
 
     def add_mean_expression(self) -> None:
         """Compute mean expression for both conditions and store in the DataFrame."""
-        self.df["mean_cond1"] = self.df[self.columns_cond1].mean(axis=1)
-        self.df["mean_cond2"] = self.df[self.columns_cond2].mean(axis=1)
+        self.df["mean_cond1"] = self.df[self.columns_cond1].mean(axis=1, skipna=True)
+        self.df["mean_cond2"] = self.df[self.columns_cond2].mean(axis=1, skipna=True)
 
     def add_number_detected(self) -> None:
         """Store the count of non-null measurements for each condition."""

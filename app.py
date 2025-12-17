@@ -13,7 +13,7 @@ import pandas as pd
 from cosinor_lite.livecell_cosinor_analysis import CosinorAnalysis
 from cosinor_lite.livecell_dataset import LiveCellDataset
 from cosinor_lite.omics_dataset import OmicsDataset
-from cosinor_lite.omics_differential_rhytmicity import DifferentialRhythmicity, OmicsHeatmap
+from cosinor_lite.omics_differential_rhytmicity import DifferentialRhythmicity, OmicsHeatmap, TimeSeriesExample
 
 plt.rcParams.update(
     {
@@ -28,8 +28,6 @@ plt.rcParams.update(
     },
 )
 plt.style.use("seaborn-v0_8-ticks")
-
-# --- (your rcParams / styles as-is) ---
 
 APP_DIR = Path(__file__).parent
 bioluminescence_file = str(APP_DIR / "data" / "bioluminescence_example.csv")
@@ -49,6 +47,8 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
     Choose between the `Live cell` and `Omics` tabs for two different types of analysis:
     - `Live cell`: inferring rhythmic properties of live cell data using three different cosinor models
     - `Omics`: differential rhythmicity analysis of omics datasets between two conditions
+
+    Developed by the Charna Dibner lab at the Université de Genève and Hôpitaux Universitaires de Genève. See also the associated Python package https://github.com/Nick-E-P/cosinor-lite.
 
     """,
     )
@@ -460,6 +460,11 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
             See the above adaptation of their figure explaining the methodology.
 
+            The tool is very similar to the dryR package in R, but implemented in Python for ease of use with other Python-based data analysis pipelines. Please see the dryR tool for more details, and if you prefer implementing in R.
+            https://github.com/naef-lab/dryR/tree/master
+
+            ### Model selection approach
+
             For condition 1 (i.e. cell type 1) and condition 2 (i.e. cell type 2), we fit five different models:
 
             - Model 1) Arrhythmic in cell type 1 and cell type 2
@@ -504,7 +509,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             )
 
             override_time = gr.Checkbox(
-                label="Override time vectors manually?",
+                label="Provide time points manually (i.e. the time associated with each sample)?",
                 value=False,
             )
             t_cond1_tb = gr.Textbox(label="t_cond1 (comma-separated)", visible=False)
@@ -516,6 +521,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             )
 
             st_df_rna = gr.State()
+            st_rhythmic = gr.State()
 
             omics_preview = gr.Code(label="Planned class inputs", language="python")
             build_omics_btn = gr.Button("Build Omics inputs", variant="primary")
@@ -826,9 +832,9 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 mean_min: float | None,
                 num_detected_min: float | None,
                 log2_option: str,
-            ) -> tuple[plt.Figure | None, str | None, pd.DataFrame | None, str | None]:
+            ) -> tuple[plt.Figure | None, str | None, pd.DataFrame | None, str | None, pd.DataFrame | None]:
                 if df is None or not cols_a or not cols_b:
-                    return None, None, None, None
+                    return None, None, None, None, None
 
                 cols_a = list(cols_a or [])
                 cols_b = list(cols_b or [])
@@ -886,7 +892,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
                 preview_df = rhythmic_all.head(20)
 
-                return fig, tmp_pdf_path, preview_df, tmp_csv_path
+                return fig, tmp_pdf_path, preview_df, tmp_csv_path, rhythmic_all
 
             compute_dr_btn.click(
                 run_dr_and_heatmap,
@@ -908,7 +914,75 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                     heatmap_download,
                     params_preview,
                     params_download,
+                    st_rhythmic,
                 ],
+            )
+            gr.Markdown("## Visualise an individual gene")
+            gr.Markdown("Note that no model will be shown if the gene was not classified confidently.")
+            gene_text = gr.Textbox(label="Gene symbol", placeholder="e.g., Artnl")
+            gene_btn = gr.Button("Plot gene time series", variant="secondary")
+            gene_plot = gr.Plot(label="Gene time series")
+            gene_download = gr.File(label="Download gene plot")
+
+            def plot_gene_time_series(  # noqa: PLR0913
+                rhythmic_df: pd.DataFrame | None,
+                gene_symbol: str,
+                cols_a: Sequence[str] | None,
+                cols_b: Sequence[str] | None,
+                use_manual_time: object,
+                t_a_text: str | None,
+                t_b_text: str | None,
+                cond1_label: str,
+                cond2_label: str,
+            ) -> tuple[plt.Figure | None, str | None]:
+                if rhythmic_df is None or rhythmic_df.empty:
+                    raise ValueError("Run the differential rhythmicity analysis first.")
+                if not gene_symbol or not gene_symbol.strip():
+                    raise ValueError("Enter a gene symbol to plot.")
+
+                cols_a = list(cols_a or [])
+                cols_b = list(cols_b or [])
+                if not cols_a or not cols_b:
+                    raise ValueError("Select columns for both conditions.")
+
+                manual_flag = bool(use_manual_time)
+                t_a = _build_time_vec(len(cols_a), t_a_text if manual_flag else None)
+                t_b = _build_time_vec(len(cols_b), t_b_text if manual_flag else None)
+
+                t_a_array = np.asarray(t_a, dtype=float)
+                t_b_array = np.asarray(t_b, dtype=float)
+
+                example = TimeSeriesExample(
+                    df=rhythmic_df,
+                    columns_cond1=cols_a,
+                    columns_cond2=cols_b,
+                    t_cond1=t_a_array,
+                    t_cond2=t_b_array,
+                    cond1_label=cond1_label or "Condition 1",
+                    cond2_label=cond2_label or "Condition 2",
+                )
+                fig = example.plot_time_series(gene_symbol.strip(), show=False)
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+                    fig.savefig(tmp_pdf.name)
+                    pdf_path = tmp_pdf.name
+                plt.close(fig)
+                return fig, pdf_path
+
+            gene_btn.click(
+                plot_gene_time_series,
+                inputs=[
+                    st_rhythmic,
+                    gene_text,
+                    columns_cond1_dd,
+                    columns_cond2_dd,
+                    override_time,
+                    t_cond1_tb,
+                    t_cond2_tb,
+                    cond1_label_tb,
+                    cond2_label_tb,
+                ],
+                outputs=[gene_plot, gene_download],
             )
             gr.Markdown(
                 """
