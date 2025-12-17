@@ -327,3 +327,10 @@ def test_time_series_example_conditional_predictions(time_series_example: TimeSe
 def test_time_series_example_plot_time_series_missing_gene(time_series_example: TimeSeriesExample) -> None:
     with pytest.raises(ValueError, match="not found"):
         time_series_example.plot_time_series("missing_gene")
+
+
+def test_time_series_example_plot_time_series_returns_figure(time_series_example: TimeSeriesExample) -> None:
+    fig = time_series_example.plot_time_series("gene_both", show=False)
+
+    assert isinstance(fig, plt.Figure)  # noqa: S101
+    plt.close(fig)

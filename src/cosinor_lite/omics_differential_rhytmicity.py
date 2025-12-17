@@ -588,7 +588,6 @@ class DifferentialRhythmicity:
         mask: pd.Series = (df["is_expressed_cond1"]) & ~(df["is_expressed_cond2"])
         df_to_analyse: pd.DataFrame = df[mask].reset_index(drop=True)
 
-        model_ids: list[int] = [model.name for model in MODELS_ONE_CONDITION]
         rows: list[dict] = []
         for gene, row in tqdm(
             df_to_analyse.set_index("Genes").iterrows(),
@@ -604,20 +603,18 @@ class DifferentialRhythmicity:
             if float(np.nanmax(weights)) < self.BIC_cutoff:
                 best_result = M0()
                 chosen_model_biw: float = np.nan
-                model: int = 0
+                chosen_model: int = 0
             else:
                 pick: int = int(np.nanargmax(weights))
                 best_result = results[pick]
                 chosen_model_biw = float(weights[pick])
-                model = int(best_result.name)
-            weight_columns = _weight_mapping(model_ids, weights)
+                chosen_model = [1, 3][pick]
             rows.append(
                 {
                     "gene": gene,
-                    "model": model,
+                    "model": chosen_model,
                     "chosen_model_bicw": chosen_model_biw,
-                    # "weight": weights[pick],
-                    **weight_columns,
+                    **{f"w_model{model_id}": weights[i] for i, model_id in enumerate([1, 3])},
                     "alpha_phase": getattr(best_result, "phase", np.nan),
                     "alpha_amp": getattr(best_result, "amp", np.nan),
                     "beta_phase": np.nan,
@@ -644,7 +641,6 @@ class DifferentialRhythmicity:
         mask: pd.Series = ~(df["is_expressed_cond1"]) & (df["is_expressed_cond2"])
         df_to_analyse: pd.DataFrame = df[mask].reset_index(drop=True)
 
-        model_ids: list[int] = [model.name for model in MODELS_ONE_CONDITION]
         rows: list[dict] = []
         for gene, row in tqdm(
             df_to_analyse.set_index("Genes").iterrows(),
@@ -660,20 +656,18 @@ class DifferentialRhythmicity:
             if float(np.nanmax(weights)) < self.BIC_cutoff:
                 best_result = M0()
                 chosen_model_biw: float = np.nan
-                model: int = 0
+                chosen_model: int = 0
             else:
                 pick: int = int(np.nanargmax(weights))
                 best_result = results[pick]
                 chosen_model_biw = float(weights[pick])
-                model = int(best_result.name)
-            weight_columns = _weight_mapping(model_ids, weights)
+                chosen_model = [1, 2][pick]
             rows.append(
                 {
                     "gene": gene,
-                    "model": model,
+                    "model": chosen_model,
                     "chosen_model_bicw": chosen_model_biw,
-                    # "weight": weights[pick],
-                    **weight_columns,
+                    **{f"w_model{model_id}": weights[i] for i, model_id in enumerate([1, 2])},
                     "alpha_phase": np.nan,
                     "alpha_amp": np.nan,
                     "beta_phase": getattr(best_result, "phase", np.nan),
@@ -852,7 +846,6 @@ class OmicsHeatmap:
 
         Raises
         ------
-        ValueError
             If the number of columns differs from the number of time labels provided.
 
         """
@@ -860,14 +853,17 @@ class OmicsHeatmap:
             text: str = f"Length of columns ({len(columns)}) must match length of times ({len(times)})"
             raise ValueError(text)
 
-        values: np.ndarray = df[columns].to_numpy()
-        unique_times: np.ndarray = np.unique(times)
+        values: np.ndarray = df[columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
 
-        result: np.ndarray = np.column_stack(
-            [values[:, times == t].mean(axis=1) for t in unique_times],
-        )
+        times_arr: np.ndarray = np.asarray(times)
+        unique_times: np.ndarray = pd.unique(times_arr)
 
-        return result
+        with np.errstate(all="ignore"):
+            means: np.ndarray = np.column_stack(
+                [np.nanmean(values[:, times_arr == t], axis=1) for t in unique_times],
+            )
+
+        return means
 
     def get_z_score(self, arr: np.ndarray) -> np.ndarray:
         """
@@ -884,10 +880,25 @@ class OmicsHeatmap:
             Z-score normalized matrix preserving the original shape.
 
         """
-        means: np.ndarray = np.mean(arr, axis=1, keepdims=True)
-        stds: np.ndarray = np.std(arr, axis=1, keepdims=True)
-        safe_stds: np.ndarray = np.where(stds == 0, 1, stds)
-        return (arr - means) / safe_stds
+        a: np.ndarray = np.asarray(arr, dtype=float)
+
+        row_all_nan: np.ndarray = np.asarray(
+            np.isnan(a).all(axis=1, keepdims=True),
+            dtype=bool,
+        )
+
+        mu: np.ndarray = np.nanmean(a, axis=1, keepdims=True)
+        sd: np.ndarray = np.nanstd(a, axis=1, ddof=0, keepdims=True)
+
+        sd = np.where(sd == 0.0, 1.0, sd)
+
+        mu = np.where(row_all_nan, 0.0, mu)
+        sd = np.where(row_all_nan, 1.0, sd)
+
+        z: np.ndarray = (a - mu) / sd
+        z = np.where(row_all_nan, np.nan, z)
+
+        return z
 
     def plot_heatmap(self, cmap: str = "bwr") -> plt.Figure:  # noqa: PLR0915
         """
@@ -970,7 +981,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[0, 0].set_title("Alpha cells")
@@ -997,7 +1008,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
         axes[1, 0].set_xticks([])
         axes[1, 0].set_yticks([])
@@ -1021,7 +1032,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
         axes[2, 0].set_xticks([])
         axes[2, 0].set_yticks([])
@@ -1045,7 +1056,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
         axes[3, 0].set_xticks([])
         axes[3, 0].set_yticks([])
@@ -1070,7 +1081,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
         axes[4, 0].set_xticks([])
         axes[4, 0].set_yticks([])
@@ -1095,7 +1106,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[5, 0].set_xticks(range(len(t_unique)), t_unique)
@@ -1122,7 +1133,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[0, 1].set_title("Beta cells")
@@ -1138,7 +1149,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[1, 1].set_xticks([])
@@ -1155,7 +1166,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[2, 1].set_xticks([])
@@ -1170,7 +1181,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[3, 1].set_xticks([])
@@ -1185,7 +1196,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[4, 1].set_xticks([])
@@ -1200,7 +1211,7 @@ class OmicsHeatmap:
             vmin=vmin_global,
             vmax=vmax_global,
             rasterized=False,
-            interpolation="none",
+            interpolation="nearest",
         )
 
         axes[5, 1].set_xticks(range(len(t_unique)), t_unique)
@@ -1297,7 +1308,13 @@ class TimeSeriesExample:
             raise ValueError(text)
         return self
 
-    def plot_time_series(self, gene: str, xticks: np.ndarray | None = None) -> None:
+    def plot_time_series(
+        self,
+        gene: str,
+        xticks: np.ndarray | None = None,
+        *,
+        show: bool = True,
+    ) -> plt.Figure:
         """
         Visualize observed expression values with corresponding model fits.
 
@@ -1307,6 +1324,8 @@ class TimeSeriesExample:
             Gene identifier to visualize.
         xticks : numpy.ndarray | None, optional
             Custom x-axis tick positions, by default ``None`` for automatic values.
+        show : bool, optional
+            Whether to display the figure immediately, by default ``True``.
 
         Raises
         ------
@@ -1352,28 +1371,33 @@ class TimeSeriesExample:
                 self.t_cond2,
                 model,
             )
-        plt.figure(figsize=(12 / 2.54, 6 / 2.54))
-        plt.subplot(1, 2, 1)
-        plt.scatter(self.t_cond1, alpha_vec, s=4)
-        plt.plot(t_test, y_test_cond1)
-        plt.ylabel("Expression Level")
-        plt.xticks(xticks)
+        fig, axes = plt.subplots(1, 2, figsize=(12 / 2.54, 6 / 2.54))
+        ax_alpha, ax_beta = axes
 
-        plt.title(f"Time Series for {gene}")
-        plt.xlabel("Time (h)")
-        plt.subplot(1, 2, 2)
-        plt.scatter(self.t_cond2, beta_vec, s=4, color="r")
-        plt.plot(t_test, y_test_cond2, color="r")
-        plt.title(f"Time Series for {gene}")
-        plt.xlabel("Time (h)")
+        ax_alpha.scatter(self.t_cond1, alpha_vec, s=4)
+        ax_alpha.plot(t_test, y_test_cond1)
+        ax_alpha.set_ylabel("Expression Level")
+        ax_alpha.set_xticks(xticks)
+        ax_alpha.set_title(f"{gene}- {self.cond1_label}")
+        ax_alpha.set_xlabel("Time (h)")
 
-        plt.xticks(xticks)
-        plt.xlim(
-            xticks[0] - 0.05 * (xticks[-1] - xticks[0]),
-            xticks[-1] + 0.05 * (xticks[-1] - xticks[0]),
-        )
-        plt.tight_layout()
-        plt.show()
+        ax_beta.scatter(self.t_cond2, beta_vec, s=4, color="r")
+        ax_beta.plot(t_test, y_test_cond2, color="r")
+        ax_beta.set_title(f"{gene}: {self.cond2_label}")
+        ax_beta.set_xlabel("Time (h)")
+        ax_beta.set_xticks(xticks)
+
+        for ax in axes:
+            ax.set_xlim(
+                xticks[0] - 0.05 * (xticks[-1] - xticks[0]),
+                xticks[-1] + 0.05 * (xticks[-1] - xticks[0]),
+            )
+
+        fig.tight_layout()
+        if show:
+            fig.show()
+
+        return fig
 
     def get_test_function_expressed_both(
         self,
