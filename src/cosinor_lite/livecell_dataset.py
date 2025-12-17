@@ -301,7 +301,7 @@ class LiveCellDataset:
         msg = f"Unknown detrending method: {method}"
         raise ValueError(msg)
 
-    def plot_group_data(
+    def plot_group_data(  # noqa: PLR0915
         self,
         group: str,
         method: str = "linear",
