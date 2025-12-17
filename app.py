@@ -576,9 +576,6 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 else:
                     dataframe = pd.read_csv(fpath, index_col=None)
 
-                # if dataframe.shape[1] > 0:
-                #     dataframe = dataframe.drop(dataframe.columns[0], axis=1)
-
                 if "gene_name" in dataframe.columns:
                     dataframe["Genes"] = dataframe["gene_name"].astype(str).str.split("|").str[1]
 
@@ -919,7 +916,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             )
             gr.Markdown("## Visualise an individual gene")
             gr.Markdown("Note that no model will be shown if the gene was not classified confidently.")
-            gene_text = gr.Textbox(label="Gene symbol", placeholder="e.g., Artnl")
+            gene_text = gr.Textbox(label="Gene symbol", placeholder="e.g., Arntl")
             gene_btn = gr.Button("Plot gene time series", variant="secondary")
             gene_plot = gr.Plot(label="Gene time series")
             gene_download = gr.File(label="Download gene plot")
@@ -936,14 +933,17 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 cond2_label: str,
             ) -> tuple[plt.Figure | None, str | None]:
                 if rhythmic_df is None or rhythmic_df.empty:
-                    raise ValueError("Run the differential rhythmicity analysis first.")
+                    msg = "Run the differential rhythmicity analysis first."
+                    raise ValueError(msg)
                 if not gene_symbol or not gene_symbol.strip():
-                    raise ValueError("Enter a gene symbol to plot.")
+                    msg = "Enter a gene symbol to plot."
+                    raise ValueError(msg)
 
                 cols_a = list(cols_a or [])
                 cols_b = list(cols_b or [])
                 if not cols_a or not cols_b:
-                    raise ValueError("Select columns for both conditions.")
+                    msg = "Select columns for both conditions."
+                    raise ValueError(msg)
 
                 manual_flag = bool(use_manual_time)
                 t_a = _build_time_vec(len(cols_a), t_a_text if manual_flag else None)

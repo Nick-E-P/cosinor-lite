@@ -603,18 +603,18 @@ class DifferentialRhythmicity:
             if float(np.nanmax(weights)) < self.BIC_cutoff:
                 best_result = M0()
                 chosen_model_biw: float = np.nan
-                model: int = 0
+                chosen_model: int = 0
             else:
                 pick: int = int(np.nanargmax(weights))
                 best_result = results[pick]
                 chosen_model_biw = float(weights[pick])
-                model: int = [1, 3][pick]
+                chosen_model = [1, 3][pick]
             rows.append(
                 {
                     "gene": gene,
-                    "model": model,
+                    "model": chosen_model,
                     "chosen_model_bicw": chosen_model_biw,
-                    **{f"w_model{model}": weights[i] for i, model in enumerate([1, 3])},
+                    **{f"w_model{model_id}": weights[i] for i, model_id in enumerate([1, 3])},
                     "alpha_phase": getattr(best_result, "phase", np.nan),
                     "alpha_amp": getattr(best_result, "amp", np.nan),
                     "beta_phase": np.nan,
@@ -656,18 +656,18 @@ class DifferentialRhythmicity:
             if float(np.nanmax(weights)) < self.BIC_cutoff:
                 best_result = M0()
                 chosen_model_biw: float = np.nan
-                model: int = 0
+                chosen_model: int = 0
             else:
                 pick: int = int(np.nanargmax(weights))
                 best_result = results[pick]
                 chosen_model_biw = float(weights[pick])
-                model: int = [1, 2][pick]
+                chosen_model = [1, 2][pick]
             rows.append(
                 {
                     "gene": gene,
-                    "model": model,
+                    "model": chosen_model,
                     "chosen_model_bicw": chosen_model_biw,
-                    **{f"w_model{model}": weights[i] for i, model in enumerate([1, 2])},
+                    **{f"w_model{model_id}": weights[i] for i, model_id in enumerate([1, 2])},
                     "alpha_phase": np.nan,
                     "alpha_amp": np.nan,
                     "beta_phase": getattr(best_result, "phase", np.nan),
@@ -853,14 +853,17 @@ class OmicsHeatmap:
             text: str = f"Length of columns ({len(columns)}) must match length of times ({len(times)})"
             raise ValueError(text)
 
-        values: np.ndarray = df[columns].to_numpy()
-        unique_times: np.ndarray = np.unique(times)
+        values: np.ndarray = df[columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
 
-        result: np.ndarray = np.column_stack(
-            [values[:, times == t].mean(axis=1) for t in unique_times],
-        )
+        times_arr: np.ndarray = np.asarray(times)
+        unique_times: np.ndarray = pd.unique(times_arr)
 
-        return result
+        with np.errstate(all="ignore"):
+            means: np.ndarray = np.column_stack(
+                [np.nanmean(values[:, times_arr == t], axis=1) for t in unique_times],
+            )
+
+        return means
 
     def get_z_score(self, arr: np.ndarray) -> np.ndarray:
         """
@@ -877,10 +880,25 @@ class OmicsHeatmap:
             Z-score normalized matrix preserving the original shape.
 
         """
-        means: np.ndarray = np.mean(arr, axis=1, keepdims=True)
-        stds: np.ndarray = np.std(arr, axis=1, keepdims=True)
-        safe_stds: np.ndarray = np.where(stds == 0, 1, stds)
-        return (arr - means) / safe_stds
+        a: np.ndarray = np.asarray(arr, dtype=float)
+
+        row_all_nan: np.ndarray = np.asarray(
+            np.isnan(a).all(axis=1, keepdims=True),
+            dtype=bool,
+        )
+
+        mu: np.ndarray = np.nanmean(a, axis=1, keepdims=True)
+        sd: np.ndarray = np.nanstd(a, axis=1, ddof=0, keepdims=True)
+
+        sd = np.where(sd == 0.0, 1.0, sd)
+
+        mu = np.where(row_all_nan, 0.0, mu)
+        sd = np.where(row_all_nan, 1.0, sd)
+
+        z: np.ndarray = (a - mu) / sd
+        z = np.where(row_all_nan, np.nan, z)
+
+        return z
 
     def plot_heatmap(self, cmap: str = "bwr") -> plt.Figure:  # noqa: PLR0915
         """
@@ -1306,6 +1324,8 @@ class TimeSeriesExample:
             Gene identifier to visualize.
         xticks : numpy.ndarray | None, optional
             Custom x-axis tick positions, by default ``None`` for automatic values.
+        show : bool, optional
+            Whether to display the figure immediately, by default ``True``.
 
         Raises
         ------
