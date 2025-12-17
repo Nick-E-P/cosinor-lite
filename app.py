@@ -472,11 +472,15 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
 
             - Model 0) unclassified
 
+            ### Note for data input
+
+            The input file needs a "Genes" column, followed by columns containing expression values for each sample. See the example file for reference.
+
                 """,
             )
 
             omics_file = gr.File(
-                label="Upload Omics TXT/TSV",
+                label="Upload Omics CSV/TXT/TSV",
                 file_types=[".txt", ".tsv", ".csv"],
                 type="filepath",
             )
@@ -558,10 +562,16 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
             def load_omics(
                 fpath: str | Path,
             ) -> tuple[object, object, object, pd.DataFrame, object, object, object, object]:
-                dataframe = pd.read_csv(fpath, sep="\t")
+                fpath_str = str(fpath)
+                if fpath_str.endswith((".txt", ".tsv")):
+                    dataframe = pd.read_csv(fpath, sep="\t", index_col=None)
+                elif fpath_str.endswith(".csv"):
+                    dataframe = pd.read_csv(fpath, index_col=None)
+                else:
+                    dataframe = pd.read_csv(fpath, index_col=None)
 
-                if dataframe.shape[1] > 0:
-                    dataframe = dataframe.drop(dataframe.columns[0], axis=1)
+                # if dataframe.shape[1] > 0:
+                #     dataframe = dataframe.drop(dataframe.columns[0], axis=1)
 
                 if "gene_name" in dataframe.columns:
                     dataframe["Genes"] = dataframe["gene_name"].astype(str).str.split("|").str[1]

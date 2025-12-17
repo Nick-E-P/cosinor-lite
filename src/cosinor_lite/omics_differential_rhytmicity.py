@@ -1359,12 +1359,12 @@ class TimeSeriesExample:
         plt.ylabel("Expression Level")
         plt.xticks(xticks)
 
-        plt.title(f"Time Series for {gene}")
+        plt.title(f"{gene}- {self.cond1_label}")
         plt.xlabel("Time (h)")
         plt.subplot(1, 2, 2)
         plt.scatter(self.t_cond2, beta_vec, s=4, color="r")
         plt.plot(t_test, y_test_cond2, color="r")
-        plt.title(f"Time Series for {gene}")
+        plt.title(f"{gene}: {self.cond2_label}")
         plt.xlabel("Time (h)")
 
         plt.xticks(xticks)
