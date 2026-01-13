@@ -24,7 +24,7 @@ dependencies = [
     "gradio>=5.50.0",
 ]
 name = "cosinor-lite"
-version = "0.1.3"
+version = "0.1.4"
 authors = [{ name = "Nick Phillips", email = "nicholas.phillips@hug.ch" }]
 description = "A simplified package for cosinor analysis of circadian bioluminescent, fluorescent and omics datasets"
 readme = "README.md"
