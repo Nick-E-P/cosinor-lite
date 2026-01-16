@@ -506,7 +506,21 @@ class CosinorAnalysis(LiveCellDataset):
             mesor_fit,
         )
         amplitude = abs(amp_fit)
-        acrophase = t_test_acro[int(np.argmax(y_test_acro))]
+
+        interior_idx = np.arange(1, y_test_acro.size - 1)
+        local_max_mask = (y_test_acro[interior_idx] > y_test_acro[interior_idx - 1]) & (
+            y_test_acro[interior_idx] > y_test_acro[interior_idx + 1]
+        )
+        candidate_idx = interior_idx[local_max_mask]
+
+        if candidate_idx.size > 0:
+            best_idx = candidate_idx[np.argmax(y_test_acro[candidate_idx])]
+        elif interior_idx.size > 0:
+            best_idx = interior_idx[np.argmax(y_test_acro[interior_idx])]
+        else:
+            best_idx = int(np.argmax(y_test_acro))
+
+        acrophase = float(t_test_acro[best_idx])
         mesor = mesor_fit
         period = float(period_fit)
         damp = float(damp_fit)
