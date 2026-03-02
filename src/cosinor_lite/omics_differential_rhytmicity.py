@@ -1430,7 +1430,11 @@ class TimeSeriesExample:
 
         """
         design: pd.DataFrame = build_design(alpha_vec, beta_vec, t_cond1, t_cond2)
-        t_test: np.ndarray = np.linspace(0, 24, 100)
+        t_test_min = min(t_cond1.min(), t_cond2.min())
+        t_test_max = max(t_cond1.max(), t_cond2.max())
+        if t_test_max - t_test_min < 24:
+            t_test_max = t_test_min + 24
+        t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
         if model == 0:
@@ -1482,7 +1486,11 @@ class TimeSeriesExample:
 
         """
         design: pd.DataFrame = build_design_cond1(alpha_vec, t_cond1)
-        t_test: np.ndarray = np.linspace(0, 24, 100)
+        t_test_min = t_cond1.min()
+        t_test_max = t_cond1.max()
+        if t_test_max - t_test_min < 24:
+            t_test_max = t_test_min + 24
+        t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
         if model == 0:
@@ -1531,7 +1539,11 @@ class TimeSeriesExample:
 
         """
         design: pd.DataFrame = build_design_cond2(beta_vec, t_cond2)
-        t_test: np.ndarray = np.linspace(0, 24, 100)
+        t_test_min = t_cond2.min()
+        t_test_max = t_cond2.max()
+        if t_test_max - t_test_min < 24:
+            t_test_max = t_test_min + 24
+        t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
         if model == 0:
