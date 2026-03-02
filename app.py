@@ -692,7 +692,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
-                    df=df,
+                    df=df.copy(),
                     columns_cond1=cols_a,
                     columns_cond2=cols_b,
                     t_cond1=t_a_array,
@@ -749,7 +749,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
-                    df=df,
+                    df=df.copy(),
                     columns_cond1=cols_a,
                     columns_cond2=cols_b,
                     t_cond1=t_a_array,
@@ -845,7 +845,7 @@ with gr.Blocks(title="Cosinor Analysis — Live Cell & Omics") as demo:
                 apply_log2 = log2_option == "yes"
 
                 rna_data = OmicsDataset(
-                    df=df,
+                    df=df.copy(),
                     columns_cond1=cols_a,
                     columns_cond2=cols_b,
                     t_cond1=t_a_array,
