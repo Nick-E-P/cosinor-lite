@@ -1399,13 +1399,14 @@ class TimeSeriesExample:
 
         return fig
 
-    def get_test_function_expressed_both(
+    def get_test_function_expressed_both(  # noqa: PLR0913
         self,
         alpha_vec: np.ndarray,
         beta_vec: np.ndarray,
         t_cond1: np.ndarray,
         t_cond2: np.ndarray,
         model: int,
+        min_time_range: float = 24.0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Produce fitted curves for genes expressed in both conditions.
@@ -1422,6 +1423,8 @@ class TimeSeriesExample:
             Zeitgeber times for ``beta_vec``.
         model : int
             Model identifier selected for the gene.
+        min_time_range : float, optional
+            Minimum time range for the fitted curves. Default is 24.0.
 
         Returns
         -------
@@ -1432,8 +1435,8 @@ class TimeSeriesExample:
         design: pd.DataFrame = build_design(alpha_vec, beta_vec, t_cond1, t_cond2)
         t_test_min = min(t_cond1.min(), t_cond2.min())
         t_test_max = max(t_cond1.max(), t_cond2.max())
-        if t_test_max - t_test_min < 24:
-            t_test_max = t_test_min + 24
+        if t_test_max - t_test_min < min_time_range:
+            t_test_max = t_test_min + min_time_range
         t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
@@ -1466,6 +1469,7 @@ class TimeSeriesExample:
         alpha_vec: np.ndarray,
         t_cond1: np.ndarray,
         model: int,
+        min_time_range: float = 24.0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Produce fitted curves for genes expressed only in condition 1.
@@ -1478,6 +1482,8 @@ class TimeSeriesExample:
             Zeitgeber times for ``alpha_vec``.
         model : int
             Model identifier selected for the gene.
+        min_time_range : float, optional
+            Minimum time range for the fitted curves. Default is 24.0.
 
         Returns
         -------
@@ -1488,8 +1494,8 @@ class TimeSeriesExample:
         design: pd.DataFrame = build_design_cond1(alpha_vec, t_cond1)
         t_test_min = t_cond1.min()
         t_test_max = t_cond1.max()
-        if t_test_max - t_test_min < 24:
-            t_test_max = t_test_min + 24
+        if t_test_max - t_test_min < min_time_range:
+            t_test_max = t_test_min + min_time_range
         t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
@@ -1519,6 +1525,7 @@ class TimeSeriesExample:
         beta_vec: np.ndarray,
         t_cond2: np.ndarray,
         model: int,
+        min_time_range: float = 24.0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Produce fitted curves for genes expressed only in condition 2.
@@ -1531,6 +1538,8 @@ class TimeSeriesExample:
             Zeitgeber times for ``beta_vec``.
         model : int
             Model identifier selected for the gene.
+        min_time_range : float, optional
+            Minimum time range for the fitted curves. Default is 24.0.
 
         Returns
         -------
@@ -1541,8 +1550,8 @@ class TimeSeriesExample:
         design: pd.DataFrame = build_design_cond2(beta_vec, t_cond2)
         t_test_min = t_cond2.min()
         t_test_max = t_cond2.max()
-        if t_test_max - t_test_min < 24:
-            t_test_max = t_test_min + 24
+        if t_test_max - t_test_min < min_time_range:
+            t_test_max = t_test_min + min_time_range
         t_test: np.ndarray = np.linspace(t_test_min, t_test_max, 100)
         y_test_cond1: np.ndarray
         y_test_cond2: np.ndarray
